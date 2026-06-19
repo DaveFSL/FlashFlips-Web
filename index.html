@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="FlashFlips — times tables practice. Progress saved on this device only." />
+  <title>FlashFlips</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <div class="bg-gradient" aria-hidden="true"></div>
+
+    <!-- HOME: Who's playing -->
+    <section id="screen-home" class="screen active" aria-label="Choose student">
+      <header class="hero">
+        <h1 class="title">⚡ Flash Flips ⚡</h1>
+        <p class="subtitle">Who's practising today?</p>
+      </header>
+      <div id="student-grid" class="student-grid"></div>
+      <p id="empty-students" class="empty-hint hidden">No students yet. Press and hold <strong>Manage Students</strong> to add your class.</p>
+      <footer class="home-footer">
+        <button type="button" id="btn-manage-hold" class="btn btn-secondary btn-manage">
+          <span class="btn-label"><span aria-hidden="true">👥</span> Manage Students</span>
+          <span class="hold-badge">🔒 HOLD</span>
+        </button>
+        <p class="privacy-note">Progress is saved on this device only.</p>
+      </footer>
+    </section>
+
+    <!-- MENU -->
+    <section id="screen-menu" class="screen" aria-label="Menu" hidden>
+      <header class="bar">
+        <button type="button" id="btn-home" class="btn btn-pill">← Home</button>
+        <div class="bar-center">
+          <span id="menu-playing-as" class="playing-as"></span>
+        </div>
+      </header>
+      <main class="menu-main panel">
+        <h2 class="section-label">Choose your times table</h2>
+        <label class="toggle-row">
+          <input type="checkbox" id="mix-tables" />
+          <span>Mix all tables together 🎲</span>
+        </label>
+        <p id="assigned-hint" class="assigned-hint hidden">Assigned by your teacher — change in Manage Students.</p>
+        <div id="table-grid" class="table-grid"></div>
+        <div class="timer-block">
+          <div class="toggle-row">
+            <span>Timer</span>
+            <label class="switch">
+              <input type="checkbox" id="timer-enabled" />
+              <span class="switch-ui"></span>
+            </label>
+          </div>
+          <div id="timer-controls" class="timer-controls hidden">
+            <input type="range" id="timer-limit" min="2" max="15" step="0.5" value="5" />
+            <p id="timer-label" class="timer-label">5.0 seconds per card</p>
+          </div>
+          <p id="timer-off-hint" class="timer-off-hint">No time limit — take your time!</p>
+        </div>
+        <button type="button" id="btn-start" class="btn btn-primary btn-large">Start Practice!</button>
+      </main>
+    </section>
+
+    <!-- GAME -->
+    <section id="screen-game" class="screen screen-game" aria-label="Game" hidden>
+      <header class="bar game-bar">
+        <button type="button" id="btn-menu" class="btn btn-pill">← Menu</button>
+        <div class="bar-center">
+          <span id="game-table-label" class="game-table-label"></span>
+          <span id="game-elapsed" class="game-elapsed hidden"></span>
+        </div>
+        <div class="score-pills">
+          <span class="pill pill-correct">✓ <span id="score-correct">0</span></span>
+          <span class="pill pill-wrong">✕ <span id="score-wrong">0</span></span>
+        </div>
+      </header>
+      <p id="cards-left" class="cards-left"></p>
+
+      <div class="game-stage">
+        <div class="pile pile-correct" id="pile-correct" aria-label="Correct pile">
+          <div class="pile-stack" id="stack-correct"></div>
+          <span class="pile-label">✅ Correct (<span id="pile-correct-count">0</span>)</span>
+        </div>
+
+        <div class="deck-area">
+          <div class="deck-peeks" aria-hidden="true"></div>
+          <div id="flash-card" class="flash-card" data-state="question">
+            <div class="card-inner">
+              <div class="card-face card-front">
+                <span id="card-question" class="card-question"></span>
+                <span class="card-equals">=</span>
+              </div>
+              <div class="card-face card-back">
+                <span id="card-answer" class="card-answer"></span>
+              </div>
+            </div>
+          </div>
+          <div id="flying-card" class="flash-card flying hidden" aria-hidden="true">
+            <div class="card-inner flipped">
+              <div class="card-face card-back">
+                <span id="flying-answer" class="card-answer"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="pile pile-incorrect" id="pile-incorrect" aria-label="Incorrect pile">
+          <div class="pile-stack" id="stack-incorrect"></div>
+          <span class="pile-label">❌ Try Again (<span id="pile-incorrect-count">0</span>)</span>
+        </div>
+      </div>
+
+      <div id="timer-bar-wrap" class="timer-bar-wrap hidden">
+        <div id="timer-bar" class="timer-bar"></div>
+      </div>
+
+      <p id="typed-display" class="typed-display">?</p>
+      <div id="numpad" class="numpad"></div>
+    </section>
+
+    <!-- SUMMARY -->
+    <section id="screen-summary" class="screen" aria-label="Summary" hidden>
+      <main class="summary-main panel">
+        <h2 class="summary-title">Round complete!</h2>
+        <p id="summary-stars" class="summary-stars"></p>
+        <p id="summary-accuracy" class="summary-stat"></p>
+        <p id="summary-rounds" class="summary-stat"></p>
+        <p id="summary-time" class="summary-stat hidden"></p>
+        <p id="summary-message" class="summary-message"></p>
+        <div class="summary-actions">
+          <button type="button" id="btn-play-again" class="btn btn-primary">Play again</button>
+          <button type="button" id="btn-summary-menu" class="btn btn-secondary">Change table</button>
+        </div>
+      </main>
+    </section>
+
+    <!-- CELEBRATION LAYER -->
+    <div id="celebration" class="celebration hidden" aria-hidden="true">
+      <canvas id="celebration-canvas"></canvas>
+    </div>
+
+    <!-- TEACHER GATE -->
+    <dialog id="dialog-gate" class="dialog">
+      <h2>Teacher area</h2>
+      <p id="gate-help" class="dialog-help"></p>
+      <div id="gate-pin-wrap" class="hidden">
+        <input type="password" id="gate-pin" inputmode="numeric" maxlength="6" placeholder="PIN" autocomplete="off" />
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" data-close="dialog-gate">Close</button>
+        <button type="button" id="btn-gate-continue" class="btn btn-primary">Continue</button>
+      </div>
+      <button type="button" id="btn-gate-settings" class="btn-link">Teacher settings</button>
+    </dialog>
+
+    <!-- TEACHER SETTINGS -->
+    <dialog id="dialog-settings" class="dialog">
+      <h2>Teacher settings</h2>
+      <p class="dialog-help">Optional PIN (off by default)</p>
+      <label class="toggle-row">
+        <input type="checkbox" id="pin-enabled" />
+        <span>Require PIN for Manage Students</span>
+      </label>
+      <div id="pin-set-wrap" class="hidden">
+        <input type="password" id="pin-new" inputmode="numeric" maxlength="6" placeholder="New PIN (4–6 digits)" />
+        <input type="password" id="pin-confirm" inputmode="numeric" maxlength="6" placeholder="Confirm PIN" />
+        <button type="button" id="btn-set-pin" class="btn btn-primary">Set PIN</button>
+        <button type="button" id="btn-clear-pin" class="btn btn-danger-text">Disable PIN</button>
+      </div>
+      <button type="button" class="btn btn-secondary" data-close="dialog-settings">Done</button>
+    </dialog>
+
+    <!-- MANAGE STUDENTS -->
+    <dialog id="dialog-manage" class="dialog dialog-large">
+      <h2>Manage Students</h2>
+      <div class="tabs">
+        <button type="button" class="tab active" data-tab="students">Students</button>
+        <button type="button" class="tab" data-tab="assignments">Assignments</button>
+      </div>
+      <div id="tab-students" class="tab-panel">
+        <ul id="manage-list" class="manage-list"></ul>
+        <button type="button" id="btn-add-one" class="btn btn-secondary">Add student</button>
+        <label class="bulk-label">Bulk add (paste names, one per line)</label>
+        <textarea id="bulk-names" rows="4" placeholder="Amy&#10;Ben&#10;Chloe"></textarea>
+        <button type="button" id="btn-bulk-add" class="btn btn-secondary">Add from list</button>
+      </div>
+      <div id="tab-assignments" class="tab-panel hidden">
+        <ul id="assign-list" class="manage-list"></ul>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="btn-export-csv" class="btn btn-secondary">Export CSV</button>
+        <button type="button" class="btn btn-primary" data-close="dialog-manage">Done</button>
+      </div>
+    </dialog>
+
+    <!-- ADD / ASSIGN MODALS -->
+    <dialog id="dialog-add-student" class="dialog">
+      <h2>Add student</h2>
+      <input type="text" id="new-student-name" placeholder="Student name" />
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" data-close="dialog-add-student">Cancel</button>
+        <button type="button" id="btn-save-student" class="btn btn-primary">Add</button>
+      </div>
+    </dialog>
+
+    <dialog id="dialog-assign" class="dialog">
+      <h2 id="assign-title">Assigned practice</h2>
+      <label class="toggle-row">
+        <input type="checkbox" id="assign-mix" />
+        <span>Mix all tables together 🎲</span>
+      </label>
+      <div id="assign-tables-wrap">
+        <p class="dialog-help">Select one table</p>
+        <div id="assign-table-grid" class="table-grid compact"></div>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-secondary" data-close="dialog-assign">Cancel</button>
+        <button type="button" id="btn-save-assign" class="btn btn-primary">Save</button>
+      </div>
+    </dialog>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
