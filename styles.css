@@ -222,11 +222,11 @@ body {
 }
 .table-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
   gap: 0.5rem;
   margin: 1rem 0;
 }
-.table-grid.compact { grid-template-columns: repeat(4, 1fr); }
+.table-grid.compact { grid-template-columns: repeat(auto-fit, minmax(54px, 1fr)); }
 .table-btn {
   aspect-ratio: 1.2;
   border: 2px solid #c4b5fd;
@@ -599,7 +599,3 @@ body {
   }
 }
 
-@media (min-width: 900px) {
-  .table-grid { grid-template-columns: repeat(15, 1fr); }
-  .table-grid.compact { grid-template-columns: repeat(5, 1fr); }
-}
