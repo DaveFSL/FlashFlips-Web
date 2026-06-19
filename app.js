@@ -498,9 +498,22 @@
   }
 
   function applyStudentAssignment(s) {
+    // Pre-select the player's last/assigned table as a convenience, but never lock it.
     game.mixTables = !!s.assignedMixMode;
     game.selectedTable = (s.assignedTables && s.assignedTables[0]) || 2;
-    game.menuLocked = true;
+    game.menuLocked = false;
+  }
+
+  function startGuestPractice(table) {
+    // Used by QR/direct links: straight into a table, no profile, nothing locked.
+    currentStudentId = null;
+    game.menuLocked = false;
+    game.mixTables = false;
+    game.selectedTable = table;
+    game.timerEnabled = false;
+    const t = $("#timer-enabled");
+    if (t) t.checked = false;
+    startGame();
   }
 
   // --- Menu ---
@@ -904,7 +917,7 @@
     const enabled = pinEnabled();
     $("#gate-help").textContent = enabled
       ? "Enter your teacher PIN to continue."
-      : "PIN is off. Tap Continue to open Manage Students.";
+      : "PIN is off. Tap Continue to open Manage Players.";
     $("#gate-pin-wrap").classList.toggle("hidden", !enabled);
     $("#gate-pin").value = "";
     dlg.showModal();
@@ -997,7 +1010,7 @@
 
   function exportCSV() {
     const rows = [
-      "Student,Date,Table,Total Cards,Correct,Incorrect,Correct %,Rounds,Time (s),Timer On,Missed Facts",
+      "Player,Date,Table,Total Cards,Correct,Incorrect,Correct %,Rounds,Time (s),Timer On,Missed Facts",
     ];
     students.forEach((st) => {
       (st.sessions || []).forEach((sess) => {
@@ -1033,31 +1046,9 @@
     URL.revokeObjectURL(a.href);
   }
 
-  function setupHoldButton() {
+  function setupManageButton() {
     const btn = $("#btn-manage-hold");
-    let holdTimer = null;
-    let didHold = false;
-
-    const start = (e) => {
-      e.preventDefault();
-      didHold = false;
-      holdTimer = setTimeout(() => {
-        didHold = true;
-        openGate();
-      }, 1300);
-    };
-    const end = () => {
-      clearTimeout(holdTimer);
-      if (!didHold) {
-        alert('Press and hold "Manage Students" to open the teacher area.');
-      }
-    };
-    btn.addEventListener("mousedown", start);
-    btn.addEventListener("touchstart", start, { passive: false });
-    btn.addEventListener("mouseup", end);
-    btn.addEventListener("mouseleave", end);
-    btn.addEventListener("touchend", end);
-    btn.addEventListener("touchcancel", end);
+    btn.addEventListener("click", () => openManage());
   }
 
   // --- Init / events ---
@@ -1072,12 +1063,17 @@
     });
 
     const urlTable = getUrlTable();
-    if (urlTable) game.selectedTable = urlTable;
 
     buildNumpad();
-    setupHoldButton();
+    setupManageButton();
     renderStudents();
-    showScreen("home");
+
+    if (urlTable) {
+      // QR / direct link (e.g. ?table=3): jump straight into that table as a guest, nothing locked.
+      startGuestPractice(urlTable);
+    } else {
+      showScreen("home");
+    }
 
     $("#mix-tables").addEventListener("change", (e) => {
       if (game.menuLocked) return;
@@ -1096,6 +1092,14 @@
       }
       updateTimerUI();
       startGame();
+    });
+
+    $("#btn-quick-practise").addEventListener("click", () => {
+      // Play without a profile (progress won't be saved).
+      currentStudentId = null;
+      game.menuLocked = false;
+      showScreen("menu");
+      refreshMenu();
     });
 
     $("#btn-home").addEventListener("click", () => {
@@ -1179,7 +1183,7 @@
       if (!name) return;
       const key = name.toLowerCase();
       if (students.some((s) => s.name.toLowerCase() === key)) {
-        alert("Student already exists.");
+        alert("Player already exists.");
         return;
       }
       students.push({
@@ -1220,7 +1224,7 @@
       renderStudents();
       renderManageList();
       $("#bulk-names").value = "";
-      alert(added ? `Added ${added} student(s).` : "No new names to add.");
+      alert(added ? `Added ${added} player(s).` : "No new names to add.");
     });
 
     $("#assign-mix").addEventListener("change", renderAssignGrid);

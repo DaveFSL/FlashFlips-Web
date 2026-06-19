@@ -132,6 +132,19 @@ body {
 }
 .privacy-note { font-size: 0.85rem; color: var(--muted); }
 
+.btn-quick {
+  display: block;
+  width: min(100%, 420px);
+  margin: 0 auto 1.5rem;
+}
+.players-label {
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
 /* Student grid */
 .student-grid {
   display: grid;

@@ -4,7 +4,21 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description" content="FlashFlips — times tables practice. Progress saved on this device only." />
-  <title>FlashFlips</title>
+  <title>Flash Flips</title>
+
+  <!-- Add to Home Screen / PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#7C3AED" />
+
+  <!-- iOS / iPadOS home screen -->
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Flash Flips" />
+
+  <!-- Favicon (browser tab) -->
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -12,17 +26,18 @@
     <div class="bg-gradient" aria-hidden="true"></div>
 
     <!-- HOME: Who's playing -->
-    <section id="screen-home" class="screen active" aria-label="Choose student">
+    <section id="screen-home" class="screen active" aria-label="Home">
       <header class="hero">
         <h1 class="title">⚡ Flash Flips ⚡</h1>
-        <p class="subtitle">Who's practising today?</p>
+        <p class="subtitle">Times tables practice</p>
       </header>
+      <button type="button" id="btn-quick-practise" class="btn btn-primary btn-large btn-quick">▶ Start practising</button>
+      <p class="players-label">Or pick a player to save progress</p>
       <div id="student-grid" class="student-grid"></div>
-      <p id="empty-students" class="empty-hint hidden">No students yet. Press and hold <strong>Manage Students</strong> to add your class.</p>
+      <p id="empty-students" class="empty-hint hidden">No players yet. Tap <strong>Manage Players</strong> to add one.</p>
       <footer class="home-footer">
         <button type="button" id="btn-manage-hold" class="btn btn-secondary btn-manage">
-          <span class="btn-label"><span aria-hidden="true">👥</span> Manage Students</span>
-          <span class="hold-badge">🔒 HOLD</span>
+          <span class="btn-label"><span aria-hidden="true">👥</span> Manage Players</span>
         </button>
         <p class="privacy-note">Progress is saved on this device only.</p>
       </footer>
@@ -42,7 +57,7 @@
           <input type="checkbox" id="mix-tables" />
           <span>Mix all tables together 🎲</span>
         </label>
-        <p id="assigned-hint" class="assigned-hint hidden">Assigned by your teacher — change in Manage Students.</p>
+        <p id="assigned-hint" class="assigned-hint hidden">Pick any times table to practise.</p>
         <div id="table-grid" class="table-grid"></div>
         <div class="timer-block">
           <div class="toggle-row">
@@ -160,7 +175,7 @@
       <p class="dialog-help">Optional PIN (off by default)</p>
       <label class="toggle-row">
         <input type="checkbox" id="pin-enabled" />
-        <span>Require PIN for Manage Students</span>
+        <span>Require PIN for Manage Players</span>
       </label>
       <div id="pin-set-wrap" class="hidden">
         <input type="password" id="pin-new" inputmode="numeric" maxlength="6" placeholder="New PIN (4–6 digits)" />
@@ -171,16 +186,16 @@
       <button type="button" class="btn btn-secondary" data-close="dialog-settings">Done</button>
     </dialog>
 
-    <!-- MANAGE STUDENTS -->
+    <!-- MANAGE PLAYERS -->
     <dialog id="dialog-manage" class="dialog dialog-large">
-      <h2>Manage Students</h2>
+      <h2>Manage Players</h2>
       <div class="tabs">
-        <button type="button" class="tab active" data-tab="students">Students</button>
-        <button type="button" class="tab" data-tab="assignments">Assignments</button>
+        <button type="button" class="tab active" data-tab="students">Players</button>
+        <button type="button" class="tab" data-tab="assignments">Tables</button>
       </div>
       <div id="tab-students" class="tab-panel">
         <ul id="manage-list" class="manage-list"></ul>
-        <button type="button" id="btn-add-one" class="btn btn-secondary">Add student</button>
+        <button type="button" id="btn-add-one" class="btn btn-secondary">Add player</button>
         <label class="bulk-label">Bulk add (paste names, one per line)</label>
         <textarea id="bulk-names" rows="4" placeholder="Amy&#10;Ben&#10;Chloe"></textarea>
         <button type="button" id="btn-bulk-add" class="btn btn-secondary">Add from list</button>
@@ -196,8 +211,8 @@
 
     <!-- ADD / ASSIGN MODALS -->
     <dialog id="dialog-add-student" class="dialog">
-      <h2>Add student</h2>
-      <input type="text" id="new-student-name" placeholder="Student name" />
+      <h2>Add player</h2>
+      <input type="text" id="new-student-name" placeholder="Player name" />
       <div class="dialog-actions">
         <button type="button" class="btn btn-secondary" data-close="dialog-add-student">Cancel</button>
         <button type="button" id="btn-save-student" class="btn btn-primary">Add</button>
