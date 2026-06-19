@@ -817,8 +817,15 @@
     game.isFlipping = false;
 
     const fc = $("#flash-card");
-    fc.style.visibility = "";
+    const inner = fc.querySelector(".card-inner");
+    // Snap back to the question side with NO animation while the card is still
+    // hidden, otherwise the next card briefly flashes its answer (back face)
+    // as it flips from answer -> question.
+    inner.style.transition = "none";
     fc.dataset.state = "question";
+    void inner.offsetWidth; // force reflow so the instant reset takes effect
+    inner.style.transition = "";
+    fc.style.visibility = "";
     $("#flying-card").classList.add("hidden");
     $("#flying-card").style.transform = "";
     $("#flying-card").style.transition = "";

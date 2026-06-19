@@ -55,10 +55,12 @@ body {
   justify-content: flex-start;
 }
 #screen-home .hero {
-  margin-top: clamp(24px, 18vh, 160px);
+  margin-top: clamp(24px, 14vh, 140px);
 }
+/* Keep the footer (Manage Players) just below the content so it stays
+   visible on big screens, instead of being pinned far away at the bottom. */
 #screen-home .home-footer {
-  margin-top: auto;
+  margin-top: 2.5rem;
 }
 
 .hidden { display: none !important; }
