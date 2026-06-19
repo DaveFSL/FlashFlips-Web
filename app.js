@@ -135,7 +135,7 @@
   function getUrlTable() {
     const p = new URLSearchParams(location.search).get("table");
     const n = parseInt(p, 10);
-    return n >= 1 && n <= 12 ? n : null;
+    return n >= 1 && n <= 15 ? n : null;
   }
 
   // --- Celebration ---
@@ -539,7 +539,7 @@
     const grid = $("#table-grid");
     grid.innerHTML = "";
     const locked = game.menuLocked && !game.mixTables;
-    for (let n = 1; n <= 12; n++) {
+    for (let n = 1; n <= 15; n++) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "table-btn";
@@ -571,13 +571,21 @@
   }
 
   // --- Game ---
+  const MIX_DECK_SIZE = 20;
+
+  // Tables above 12 (13–15) go ×1–×15; the classic 1–12 tables stay ×1–×12.
+  function maxFactorFor(table) {
+    return table > 12 ? 15 : 12;
+  }
+
   function buildDeck() {
     const cards = [];
     const tables = game.mixTables
-      ? Array.from({ length: 12 }, (_, i) => i + 1)
+      ? Array.from({ length: 15 }, (_, i) => i + 1)
       : [game.selectedTable];
     tables.forEach((t) => {
-      for (let i = 1; i <= 12; i++) {
+      const maxFactor = maxFactorFor(t);
+      for (let i = 1; i <= maxFactor; i++) {
         cards.push({
           id: uid(),
           multiplier: t,
@@ -587,7 +595,9 @@
         });
       }
     });
-    return shuffle(cards);
+    const shuffled = shuffle(cards);
+    // Mix mode draws from every table, so keep rounds to a manageable 20 cards.
+    return game.mixTables ? shuffled.slice(0, MIX_DECK_SIZE) : shuffled;
   }
 
   function startGame() {
@@ -994,7 +1004,7 @@
     grid.innerHTML = "";
     const mix = $("#assign-mix").checked;
     wrap.classList.toggle("hidden", mix);
-    for (let n = 1; n <= 12; n++) {
+    for (let n = 1; n <= 15; n++) {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "table-btn";

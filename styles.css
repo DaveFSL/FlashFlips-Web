@@ -48,12 +48,14 @@ body {
 }
 .screen.active { display: flex; }
 
-/* Home: keep content vertically balanced (and clear of the status bar)
-   even when few/no players have been added yet. The two auto margins split
-   the free space evenly above the hero and below the content, centering the
-   main block while pinning the footer to the bottom. */
+/* Home: sit the main content in the upper third (clear of the status bar),
+   with the footer pinned to the bottom. Adjust the 18vh below to taste:
+   smaller = higher up, larger = closer to centre. */
+#screen-home {
+  justify-content: flex-start;
+}
 #screen-home .hero {
-  margin-top: auto;
+  margin-top: clamp(24px, 18vh, 160px);
 }
 #screen-home .home-footer {
   margin-top: auto;
@@ -598,5 +600,6 @@ body {
 }
 
 @media (min-width: 900px) {
-  .table-grid { grid-template-columns: repeat(12, 1fr); }
+  .table-grid { grid-template-columns: repeat(15, 1fr); }
+  .table-grid.compact { grid-template-columns: repeat(5, 1fr); }
 }
