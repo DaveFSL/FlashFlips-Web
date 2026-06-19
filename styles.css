@@ -41,9 +41,23 @@ body {
   flex-direction: column;
   min-height: 100dvh;
   padding: 16px;
+  padding-top: max(16px, env(safe-area-inset-top));
   padding-bottom: max(16px, env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+  padding-right: max(16px, env(safe-area-inset-right));
 }
 .screen.active { display: flex; }
+
+/* Home: keep content vertically balanced (and clear of the status bar)
+   even when few/no players have been added yet. The two auto margins split
+   the free space evenly above the hero and below the content, centering the
+   main block while pinning the footer to the bottom. */
+#screen-home .hero {
+  margin-top: auto;
+}
+#screen-home .home-footer {
+  margin-top: auto;
+}
 
 .hidden { display: none !important; }
 
