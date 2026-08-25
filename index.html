@@ -60,20 +60,6 @@
         </label>
         <p id="assigned-hint" class="assigned-hint hidden">Pick any times table to practise.</p>
         <div id="table-grid" class="table-grid"></div>
-        <div class="timer-block">
-          <div class="toggle-row">
-            <span>Timer</span>
-            <label class="switch">
-              <input type="checkbox" id="timer-enabled" />
-              <span class="switch-ui"></span>
-            </label>
-          </div>
-          <div id="timer-controls" class="timer-controls hidden">
-            <input type="range" id="timer-limit" min="2" max="15" step="0.5" value="5" />
-            <p id="timer-label" class="timer-label">5.0 seconds per card</p>
-          </div>
-          <p id="timer-off-hint" class="timer-off-hint">No time limit — take your time!</p>
-        </div>
         <button type="button" id="btn-start" class="btn btn-primary btn-large">Start Practice!</button>
       </main>
     </section>
@@ -84,7 +70,6 @@
         <button type="button" id="btn-menu" class="btn btn-pill">← Menu</button>
         <div class="bar-center">
           <span id="game-table-label" class="game-table-label"></span>
-          <span id="game-elapsed" class="game-elapsed hidden"></span>
         </div>
         <div class="score-pills">
           <span class="pill pill-correct">✓ <span id="score-correct">0</span></span>
@@ -125,10 +110,6 @@
           <div class="pile-stack" id="stack-incorrect"></div>
           <span class="pile-label">❌ Try Again (<span id="pile-incorrect-count">0</span>)</span>
         </div>
-      </div>
-
-      <div id="timer-bar-wrap" class="timer-bar-wrap hidden">
-        <div id="timer-bar" class="timer-bar"></div>
       </div>
 
       <p id="typed-display" class="typed-display">?</p>

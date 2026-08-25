@@ -48,10 +48,6 @@
     totalAttempts: 0,
     totalIncorrect: 0,
     missedFacts: [],
-    timerEnabled: false,
-    timeLimit: 5,
-    timeRemaining: 5,
-    timerId: null,
     elapsedId: null,
     gameStart: 0,
     elapsed: 0,
@@ -510,9 +506,6 @@
     game.menuLocked = false;
     game.mixTables = false;
     game.selectedTable = table;
-    game.timerEnabled = false;
-    const t = $("#timer-enabled");
-    if (t) t.checked = false;
     startGame();
   }
 
@@ -521,9 +514,6 @@
     const s = currentStudent();
     $("#menu-playing-as").textContent = s ? `Playing as ${s.name}` : "";
     $("#mix-tables").checked = game.mixTables;
-    $("#timer-enabled").checked = game.timerEnabled;
-    $("#timer-limit").value = game.timeLimit;
-    updateTimerUI();
 
     const hint = $("#assigned-hint");
     if (game.menuLocked && s) {
@@ -557,17 +547,6 @@
       grid.appendChild(btn);
     }
     $("#mix-tables").disabled = game.menuLocked;
-  }
-
-  function updateTimerUI() {
-    const on = $("#timer-enabled").checked;
-    game.timerEnabled = on;
-    $("#timer-controls").classList.toggle("hidden", !on);
-    $("#timer-off-hint").classList.toggle("hidden", on);
-    if (on) {
-      game.timeLimit = parseFloat($("#timer-limit").value);
-      $("#timer-label").textContent = `${game.timeLimit.toFixed(1)} seconds per card`;
-    }
   }
 
   // --- Game ---
@@ -615,43 +594,24 @@
     game.elapsed = 0;
 
     stopTimers();
-    if (game.timerEnabled) {
-      startCountdown();
-      startElapsed();
-    }
+    startElapsed();
 
     showScreen("game");
     $("#game-table-label").textContent = game.mixTables
       ? "Mixed Tables"
       : `${game.selectedTable}× Tables`;
-    $("#game-elapsed").classList.toggle("hidden", !game.timerEnabled);
     renderGame();
   }
 
   function stopTimers() {
-    if (game.timerId) clearInterval(game.timerId);
     if (game.elapsedId) clearInterval(game.elapsedId);
-    game.timerId = null;
     game.elapsedId = null;
   }
 
-  function startCountdown() {
-    game.timeRemaining = game.timeLimit;
-    updateTimerBar();
-    game.timerId = setInterval(() => {
-      game.timeRemaining -= 0.1;
-      if (game.timeRemaining <= 0) {
-        game.timeRemaining = 0;
-        resolveCard(false);
-      }
-      updateTimerBar();
-    }, 100);
-  }
-
   function startElapsed() {
+    // Session duration is still recorded (never displayed) for later analysis.
     game.elapsedId = setInterval(() => {
       game.elapsed = (Date.now() - game.gameStart) / 1000;
-      $("#game-elapsed").textContent = formatTime(game.elapsed);
     }, 100);
   }
 
@@ -662,16 +622,6 @@
     const rs = s % 60;
     if (m > 0) return `${m}:${String(rs).padStart(2, "0")}.${t}`;
     return `${rs}.${t}s`;
-  }
-
-  function updateTimerBar() {
-    const wrap = $("#timer-bar-wrap");
-    wrap.classList.toggle("hidden", !game.timerEnabled);
-    const bar = $("#timer-bar");
-    const p = game.timeLimit > 0 ? game.timeRemaining / game.timeLimit : 0;
-    bar.style.width = `${Math.max(0, p * 100)}%`;
-    bar.style.background =
-      p > 0.5 ? "var(--green)" : p > 0.25 ? "#FF9800" : "var(--red)";
   }
 
   function renderGame() {
@@ -744,7 +694,6 @@
   function resolveCard(correct) {
     if (game.isFlipping) return;
     game.isFlipping = true;
-    stopTimers();
 
     const card = game.cards[game.index];
     const fc = $("#flash-card");
@@ -839,11 +788,6 @@
       game.incorrect = [];
       game.index = 0;
       game.roundNumber++;
-      if (game.timerEnabled) {
-        startCountdown();
-      }
-    } else if (game.timerEnabled) {
-      startCountdown();
     }
 
     renderGame();
@@ -859,20 +803,13 @@
 
     saveSession({
       accuracy,
-      elapsed: game.timerEnabled ? elapsed : null,
+      elapsed,
       rounds: game.roundNumber,
     });
 
     $("#summary-stars").textContent = starCount(game.roundNumber);
     $("#summary-accuracy").textContent = `Accuracy: ${Math.round(accuracy)}%`;
     $("#summary-rounds").textContent = `Rounds needed: ${game.roundNumber}`;
-    const timeEl = $("#summary-time");
-    if (game.timerEnabled) {
-      timeEl.classList.remove("hidden");
-      timeEl.textContent = `Time: ${formatTime(elapsed)}`;
-    } else {
-      timeEl.classList.add("hidden");
-    }
     $("#summary-message").textContent = encouragingMessage(accuracy);
 
     startCelebration();
@@ -898,7 +835,6 @@
       roundsNeeded: rounds,
       completionTime: elapsed,
       missedFacts: [...game.missedFacts],
-      timerEnabled: game.timerEnabled,
     };
     s.sessions = s.sessions || [];
     s.sessions.push(session);
@@ -1098,16 +1034,12 @@
       renderTableGrid();
     });
 
-    $("#timer-enabled").addEventListener("change", updateTimerUI);
-    $("#timer-limit").addEventListener("input", updateTimerUI);
-
     $("#btn-start").addEventListener("click", () => {
       game.mixTables = $("#mix-tables").checked;
       if (!game.mixTables) {
         const sel = document.querySelector(".table-btn.selected");
         if (sel) game.selectedTable = parseInt(sel.textContent, 10);
       }
-      updateTimerUI();
       startGame();
     });
 
