@@ -81,6 +81,30 @@
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
+  function median(nums) {
+    if (!nums || nums.length === 0) return null;
+    const sorted = [...nums].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  }
+
+  function dominantValue(arr) {
+    if (!arr || arr.length === 0) return null;
+    const counts = {};
+    let best = null;
+    let bestN = -1;
+    arr.forEach((v) => {
+      counts[v] = (counts[v] || 0) + 1;
+      if (counts[v] > bestN) {
+        bestN = counts[v];
+        best = v;
+      }
+    });
+    return best;
+  }
+
   function hexToRgba(hex, alpha) {
     const h = hex.replace("#", "");
     const r = parseInt(h.substring(0, 2), 16);
@@ -847,6 +871,9 @@
     const tableName = game.mixTables
       ? "Mixed Tables"
       : `${game.selectedTable}× Tables`;
+    const firstPassMs = game.attempts
+      .filter((a) => a.round === 1)
+      .map((a) => a.ms);
     const session = {
       id: uid(),
       date: new Date().toISOString(),
@@ -857,6 +884,11 @@
       roundsNeeded: rounds,
       completionTime: elapsed,
       missedFacts: [...game.missedFacts],
+      schemaVersion: SCHEMA_VERSION,
+      cleanFirstPass: rounds === 1,
+      attempts: [...game.attempts],
+      firstPassMedianMs: median(firstPassMs),
+      dominantInput: dominantValue(game.attempts.map((a) => a.input)),
     };
     s.sessions = s.sessions || [];
     s.sessions.push(session);
