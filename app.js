@@ -8,6 +8,8 @@
   const STORAGE_PIN_ENABLED = "FlashFlips_TeacherPinEnabled";
   const STORAGE_PIN = "FlashFlips_TeacherPin";
 
+  const SCHEMA_VERSION = 2;
+
   const MESSAGES = {
     perfect: [
       "🌟 Perfect Score! You're a Maths Superstar!",
@@ -54,6 +56,9 @@
     mixTables: false,
     selectedTable: 2,
     menuLocked: false,
+    cardStartedAt: 0,
+    attempts: [],
+    lastInputMethod: "unknown",
   };
 
   // --- DOM ---
@@ -590,6 +595,7 @@
     game.totalAttempts = 0;
     game.totalIncorrect = 0;
     game.missedFacts = [];
+    game.attempts = [];
     game.gameStart = Date.now();
     game.elapsed = 0;
 
@@ -650,6 +656,13 @@
     const display = $("#typed-display");
     display.textContent = game.typed || "?";
     display.classList.toggle("empty", !game.typed);
+
+    // Start the per-card timer only when a fresh card is on screen (not mid-flip,
+    // and not on the re-renders that happen while a digit is being typed — those
+    // have game.typed set — otherwise the measured time would reset each keypress).
+    if (!game.isFlipping && game.typed === "") {
+      game.cardStartedAt = performance.now();
+    }
   }
 
   function renderPileStacks() {
@@ -687,11 +700,12 @@
     if (game.isFlipping) return;
     const card = game.cards[game.index];
     if (!card || !game.typed) return;
+    const elapsedMs = performance.now() - game.cardStartedAt;
     const ok = parseInt(game.typed, 10) === card.answer;
-    resolveCard(ok);
+    resolveCard(ok, elapsedMs);
   }
 
-  function resolveCard(correct) {
+  function resolveCard(correct, elapsedMs) {
     if (game.isFlipping) return;
     game.isFlipping = true;
 
@@ -734,7 +748,7 @@
         flying.style.transform = `translate(${dx}px, ${dy}px)`;
       });
 
-      setTimeout(finishResolve, slideDuration + 80, correct, card);
+      setTimeout(finishResolve, slideDuration + 80, correct, card, elapsedMs);
     }, slideDelay);
   }
 
@@ -751,7 +765,15 @@
     }, 200);
   }
 
-  function finishResolve(correct, card) {
+  function finishResolve(correct, card, elapsedMs) {
+    game.attempts.push({
+      q: card.question,
+      ms: Math.round(elapsedMs),
+      correct: correct,
+      round: game.roundNumber,
+      input: game.lastInputMethod,
+    });
+
     if (correct) {
       game.correct.push(card);
     } else {
@@ -861,6 +883,12 @@
         b.addEventListener("click", () => appendDigit(k));
       }
       pad.appendChild(b);
+    });
+
+    // Record the input device (touch vs mouse) per attempt; keyboard entry
+    // overrides this in the document keydown handler.
+    pad.addEventListener("pointerdown", (e) => {
+      game.lastInputMethod = e.pointerType === "touch" ? "touch" : "mouse";
     });
   }
 
