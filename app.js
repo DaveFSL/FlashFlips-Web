@@ -1059,6 +1059,37 @@
     URL.revokeObjectURL(a.href);
   }
 
+  function exportAttemptsCSV() {
+    const rows = ["Player,Date,Table,Question,Time (ms),Correct,Round,Input"];
+    students.forEach((st) => {
+      (st.sessions || []).forEach((sess) => {
+        // Older sessions (schema v1) have no attempts array — skip them.
+        if (!Array.isArray(sess.attempts)) return;
+        const d = new Date(sess.date).toLocaleString();
+        sess.attempts.forEach((att) => {
+          rows.push(
+            [
+              `"${st.name.replace(/"/g, '""')}"`,
+              `"${d}"`,
+              `"${sess.tableName}"`,
+              `"${String(att.q).replace(/"/g, '""')}"`,
+              att.ms,
+              att.correct ? "Yes" : "No",
+              att.round,
+              att.input,
+            ].join(",")
+          );
+        });
+      });
+    });
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "FlashFlips-card-times.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   function setupManageButton() {
     const btn = $("#btn-manage-hold");
     btn.addEventListener("click", () => openManage());
@@ -1250,6 +1281,7 @@
     });
 
     $("#btn-export-csv").addEventListener("click", exportCSV);
+    $("#btn-export-attempts").addEventListener("click", exportAttemptsCSV);
 
     $$("[data-close]").forEach((btn) => {
       btn.addEventListener("click", () => {
