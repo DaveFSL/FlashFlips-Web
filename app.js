@@ -856,6 +856,16 @@
     $("#summary-stars").textContent = starCount(game.roundNumber);
     $("#summary-accuracy").textContent = `Accuracy: ${Math.round(accuracy)}%`;
     $("#summary-rounds").textContent = `Rounds needed: ${game.roundNumber}`;
+
+    const medMs = median(game.attempts.map((a) => a.ms));
+    const timeEl = $("#summary-time");
+    if (medMs != null) {
+      timeEl.classList.remove("hidden");
+      timeEl.textContent = `Average time per card: ${(medMs / 1000).toFixed(1)}s`;
+    } else {
+      timeEl.classList.add("hidden");
+    }
+
     $("#summary-message").textContent = encouragingMessage(accuracy);
 
     startCelebration();
