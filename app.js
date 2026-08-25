@@ -1228,10 +1228,23 @@
     });
 
     document.addEventListener("keydown", (e) => {
-      if (screens.game.classList.contains("active") && !game.isFlipping) {
-        if (e.key >= "0" && e.key <= "9") appendDigit(e.key);
-        if (e.key === "Backspace") deleteDigit();
-        if (e.key === "Enter") submitAnswer();
+      // Never hijack typing while a dialog or text field is focused.
+      if (document.querySelector("dialog[open]")) return;
+      const ae = document.activeElement;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return;
+      // Only act during active play.
+      if (!screens.game.classList.contains("active")) return;
+
+      if (e.key >= "0" && e.key <= "9") {
+        game.lastInputMethod = "keyboard";
+        appendDigit(e.key);
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        game.lastInputMethod = "keyboard";
+        deleteDigit();
+      } else if (e.key === "Enter") {
+        game.lastInputMethod = "keyboard";
+        submitAnswer();
       }
     });
   }
