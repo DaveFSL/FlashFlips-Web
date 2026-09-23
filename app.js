@@ -24,9 +24,9 @@
    * is three. Without it, the tables with bigger answers look slower than they
    * are.
    *
-   * A "clean pass" is a first-round-only run with no errors where every card
-   * came in under its own threshold. A table is mastered once passesNeeded of
-   * the last windowSize sessions on it were clean passes.
+   * A "clean pass" is a first-round-only run with no errors where at most
+   * allowedSlow cards missed their own threshold. A table is mastered once
+   * passesNeeded of the last windowSize sessions on it were clean passes.
    *
    * These numbers are a starting point. Export the card times, look at what
    * genuinely secure students actually score, and tune. Mastery is recalculated
@@ -39,6 +39,12 @@
     passesNeeded: 2,
     windowSize: 3,
     challengeMultiplier: 1.6, // 13–20 need working out, not recall — allow longer
+    // How many cards in a round may miss their time threshold and still have
+    // the round count. Requiring all twelve made mastery a coin flip: at a
+    // 1.5s median only a quarter of error-free rounds qualified, so a child
+    // who answered everything correctly three times running was told they had
+    // none. Mistakes are still absolute — any wrong answer fails the round.
+    allowedSlow: 2,
   };
 
   /**
@@ -529,18 +535,23 @@
   }
 
   /**
-   * A clean pass: finished in one round, nothing wrong, and every card inside
-   * its own threshold. Sessions recorded before attempt-level timing existed
-   * (schema v1) can't be judged, so they don't count either way.
+   * A clean pass: finished in one round, nothing wrong, and no more than
+   * allowedSlow cards over their own threshold. Sessions recorded before
+   * attempt-level timing existed (schema v1) can't be judged, so they don't
+   * count either way.
    */
   function isCleanPass(session) {
     if (!Array.isArray(session.attempts) || session.attempts.length === 0) return false;
     if (session.roundsNeeded !== 1) return false;
-    return session.attempts.every((a) => {
-      if (!a.correct) return false;
+
+    let slow = 0;
+    for (const a of session.attempts) {
+      if (!a.correct) return false; // a wrong answer fails the round outright
       const answer = a.answer != null ? a.answer : 10; // pre-v3 sessions stored no answer
-      return a.ms <= thresholdFor(answer, !!a.challenge);
-    });
+      if (a.ms > thresholdFor(answer, !!a.challenge)) slow++;
+      if (slow > MASTERY.allowedSlow) return false;
+    }
+    return true;
   }
 
   /**
@@ -735,7 +746,7 @@
           m.state === "mastered"
             ? "mastered"
             : m.state === "practising"
-            ? `${m.cleanPasses} of ${MASTERY.passesNeeded} clean runs`
+            ? `${m.cleanPasses} of ${MASTERY.passesNeeded} good runs`
             : "not started"
         }`
       );
@@ -1314,7 +1325,7 @@
       m.state === "mastered"
         ? "mastered"
         : m.state === "practising"
-        ? `${m.cleanPasses} of ${MASTERY.passesNeeded} clean`
+        ? `${m.cleanPasses} of ${MASTERY.passesNeeded} good runs`
         : "not started";
     btn.setAttribute("aria-label", `${table} times table, ${label}`);
 
@@ -1338,16 +1349,18 @@
       return;
     }
 
+    // "Clean run" meant all correct AND quick enough, but only said the first
+    // half — so a child with a perfect round was told they had none. Say both.
+    const window = Math.min(m.sessions, MASTERY.windowSize);
+    const wasWere = m.cleanPasses === 1 ? "was" : "were";
     const statusText =
       m.state === "mastered"
-        ? `★ Mastered — ${m.cleanPasses} clean runs out of your last ${Math.min(
-            m.sessions,
-            MASTERY.windowSize
-          )}`
-        : `${m.cleanPasses} clean run${m.cleanPasses === 1 ? "" : "s"} out of your last ${Math.min(
-            m.sessions,
-            MASTERY.windowSize
-          )} — ${MASTERY.passesNeeded} needed to master it`;
+        ? `★ Mastered — ${m.cleanPasses} of your last ${window} runs ${
+            m.cleanPasses === 1 ? "was" : "were"
+          } all correct and quick`
+        : `${m.cleanPasses} of your last ${window} run${
+            window === 1 ? "" : "s"
+          } ${wasWere} all correct and quick — ${MASTERY.passesNeeded} needed to master it`;
     $("#wall-detail-status").textContent = statusText;
 
     renderTrendGraph(trendFor(student, table));
@@ -1640,7 +1653,7 @@
     const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "FlashFlips-export.csv";
+    a.download = exportFilename("sessions");
     a.click();
     URL.revokeObjectURL(a.href);
   }
@@ -1651,6 +1664,20 @@
    * so a three-digit answer is legitimately slower than a one-digit one.
    * Threshold/Under Threshold show what the current settings would score.
    */
+  // Every device exports to the same name, so 28 iPads produce 28 files all
+  // called FlashFlips-export.csv and they collide the moment they land in
+  // one folder. Stamp the player (or the count) and the date into the name.
+  function exportFilename(base) {
+    const who =
+      students.length === 1
+        ? students[0].name.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")
+        : `${students.length}-players`;
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    return `FlashFlips-${base}-${who || "player"}-${stamp}.csv`;
+  }
+
   function exportAttemptsCSV() {
     const rows = [
       "Player,Date,Table,Challenge,Question,Answer,Digits,Time (ms),Threshold (ms),Under Threshold,Correct,Round,Input",
@@ -1688,7 +1715,7 @@
     const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "FlashFlips-card-times.csv";
+    a.download = exportFilename("card-times");
     a.click();
     URL.revokeObjectURL(a.href);
   }
