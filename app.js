@@ -774,6 +774,14 @@
 
     $("#mix-tables").disabled = game.menuLocked;
 
+    // The button names what you picked, so the ring round a tile needs no
+    // explaining and a mis-tap is caught before the deck starts.
+    $("#btn-start").textContent = game.mixTables
+      ? game.challenge
+        ? "Start challenge mix!"
+        : "Start mixed practice!"
+      : `Start ${game.selectedTable}× practice!`;
+
     // The chooser only carries mastery colours when someone is signed in,
     // so the count and the key appear and disappear with them.
     const student = currentStudent();
