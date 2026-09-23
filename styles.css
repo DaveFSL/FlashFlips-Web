@@ -830,31 +830,30 @@ body.playing-challenge .pile-incorrect .pile-label svg { stroke: var(--wrong); }
 /* Column layout so a tall dialog scrolls its middle and keeps the title
    and the Done button on screen — the wall with a graph open used to
    push Done off the bottom of an iPad. */
+/* The whole dialog scrolls, as it always did — no flex column, no nested
+   scroller. A flex child sized to fill its parent depends on how each
+   engine resolves a flex basis against an auto-height container, and when
+   an engine disagrees the body measures zero and the dialog renders as a
+   title above a Done button with nothing in between. Sticky has no such
+   failure mode: if it isn't supported the footer simply scrolls. */
 .dialog-large {
   max-width: 620px;
+  max-height: 88vh; /* fallback for engines without dvh */
   max-height: 88dvh;
-  overflow: hidden;
-}
-/* Guarded by [open]: a bare `display: flex` here beats the browser's own
-   `dialog:not([open]) { display: none }`, which leaves the closed dialog
-   sitting invisibly over the menu swallowing every tap. */
-.dialog-large[open] {
-  display: flex;
-  flex-direction: column;
-}
-.dialog-large > .dialog-scroll {
-  flex: 1;
-  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  margin: 0 -0.5rem;
-  padding: 0 0.5rem;
 }
+/* Negative offsets cancel the dialog's own 1.5rem padding so the footer
+   sits flush to the bottom edge and its background covers what passes
+   beneath it. */
 .dialog-large > .dialog-actions {
-  flex-shrink: 0;
+  position: sticky;
+  bottom: -1.5rem;
+  margin-bottom: -1.5rem;
+  padding: 0.9rem 0 1.5rem;
+  background: #fff;
   border-top: 1px solid #f0eefb;
-  padding-top: 0.9rem;
 }
 .dialog::backdrop { background: rgba(29, 32, 51, 0.45); }
 .dialog h2 { margin-top: 0; font-family: var(--display); font-weight: 600; color: #5535c4; }
