@@ -10,6 +10,15 @@
   --text: #1a1a2e;
   --muted: #6b7280;
   --white: #fff;
+  /* Challenge mode (tables 13–20) reads as a distinct deep teal so a teacher
+     can tell at a glance, from across the room, who is on the hard tables. */
+  --challenge: #0f766e;
+  --challenge-deep: #115e59;
+  --challenge-light: #d7f2ee;
+  --challenge-pale: #eefaf8;
+  --gold: #eab308;
+  --gold-deep: #a16207;
+  --amber: #f59e0b;
   --radius: 16px;
   --card-w: min(360px, 48vw);
   --card-h: calc(var(--card-w) * 0.6);
@@ -553,3 +562,201 @@ body {
   }
 }
 
+
+/* ============================================================
+   CHALLENGE MODE (tables 13–20)
+   ============================================================ */
+
+.toggle-challenge {
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 14px;
+  background: var(--challenge-pale);
+  border: 2px solid var(--challenge-light);
+  color: var(--challenge-deep);
+  font-weight: 700;
+}
+.toggle-challenge input { accent-color: var(--challenge); }
+
+.challenge-group { margin-top: 0.5rem; }
+.section-label-challenge {
+  color: var(--challenge);
+  font-size: 1rem;
+  margin: 0.75rem 0 0.5rem;
+}
+
+/* Challenge table buttons carry the teal so the choice is obvious. */
+.table-btn.challenge {
+  border-color: var(--challenge-light);
+  background: linear-gradient(180deg, var(--challenge-pale), var(--challenge-light));
+  color: var(--challenge-deep);
+}
+.table-btn.challenge.selected {
+  background: linear-gradient(180deg, var(--challenge), var(--challenge-deep));
+  color: #fff;
+  border-color: transparent;
+}
+
+/* While a challenge table is actually in play, the whole game screen shifts:
+   visible from a distance, which is the point. */
+body.playing-challenge .bg-gradient {
+  background: linear-gradient(135deg, #e0f5f2 0%, #ccebe7 45%, #d9f0ff 100%);
+}
+body.playing-challenge .card-front {
+  background: linear-gradient(145deg, #14857a, var(--challenge-deep));
+}
+body.playing-challenge .card-face {
+  box-shadow: 0 10px 28px rgba(15, 118, 110, 0.4);
+}
+body.playing-challenge .game-table-label {
+  background: linear-gradient(90deg, var(--challenge), #0891b2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+body.playing-challenge .typed-display { color: var(--challenge-deep); }
+body.playing-challenge .numpad button { color: var(--challenge-deep); }
+body.playing-challenge .numpad button.pad-submit {
+  background: linear-gradient(180deg, #14857a, var(--challenge-deep));
+  color: #fff;
+}
+body.playing-challenge .btn-pill {
+  background: var(--challenge-light);
+  color: var(--challenge-deep);
+}
+
+/* ============================================================
+   MASTERY WALL
+   ============================================================ */
+
+.btn-wall {
+  width: 100%;
+  margin-top: 0.75rem;
+  font-size: 1.05rem;
+}
+
+.wall-summary {
+  text-align: center;
+  font-weight: 800;
+  color: var(--purple);
+  margin: 0 0 1rem;
+}
+
+/* Fixed column counts so the rows divide evenly: 12 core tiles as 2 rows of 6,
+   8 challenge tiles as 2 rows of 4. auto-fit would leave ragged last rows. */
+.wall-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+#wall-challenge { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 430px) {
+  .wall-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
+.wall-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 14px;
+  border: 2px solid transparent;
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  transition: transform 0.12s;
+}
+.wall-tile:active { transform: scale(0.95); }
+.wall-num { font-size: 1.05rem; line-height: 1; }
+.wall-mark { font-size: 0.85rem; line-height: 1; }
+
+/* Grey = not started, amber = practising, gold = mastered. */
+.wall-none {
+  background: #f1f1f4;
+  border-color: #e2e2e8;
+  color: #9ca3af;
+}
+.wall-practising {
+  background: linear-gradient(180deg, #fff4dc, #ffe9bd);
+  border-color: #fcd88a;
+  color: #92620a;
+}
+.wall-mastered {
+  background: linear-gradient(180deg, #ffd977, var(--gold));
+  border-color: var(--gold-deep);
+  color: #4a3106;
+  box-shadow: 0 3px 10px rgba(234, 179, 8, 0.4);
+}
+.wall-tile.challenge.wall-none { background: #eef6f5; border-color: #dbeceA; }
+
+.wall-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin: 0.75rem 0 0.25rem;
+}
+.wall-key span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.key-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  display: inline-block;
+}
+.key-mastered { background: var(--gold); }
+.key-practising { background: #ffe9bd; border: 1px solid #fcd88a; }
+.key-none { background: #f1f1f4; border: 1px solid #e2e2e8; }
+
+.wall-detail {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 16px;
+  background: var(--purple-pale);
+}
+.wall-detail h3 { margin: 0 0 0.25rem; color: var(--purple); }
+.wall-detail-status {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+.wall-graph { min-height: 40px; }
+.wall-graph-empty,
+.wall-graph-caption {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-align: center;
+  margin: 0.4rem 0 0;
+}
+.trend-svg { width: 100%; height: auto; display: block; }
+.trend-line {
+  fill: none;
+  stroke: var(--purple);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.trend-dot { fill: var(--purple); }
+.trend-dot-last { fill: var(--orange); }
+
+.summary-mastered {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: var(--gold-deep);
+  margin: 0.5rem 0;
+}
+
+.trend-axis {
+  font-size: 9px;
+  font-weight: 800;
+  fill: var(--muted);
+}

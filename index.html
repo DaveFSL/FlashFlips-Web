@@ -20,7 +20,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
 
   <!-- Asset version: bump ?v= on every styles.css / app.js change to bust caches. -->
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
 </head>
 <body>
   <div id="app" class="app">
@@ -56,11 +56,24 @@
         <h2 class="section-label">Choose your times table</h2>
         <label class="toggle-row">
           <input type="checkbox" id="mix-tables" />
-          <span>Mix all tables together 🎲</span>
+          <span id="mix-label">Mix all tables together 🎲</span>
         </label>
         <p id="assigned-hint" class="assigned-hint hidden">Pick any times table to practise.</p>
         <div id="table-grid" class="table-grid"></div>
+
+        <!-- Challenge tables (13–20) stay hidden until the toggle is on. -->
+        <div id="challenge-group" class="challenge-group hidden">
+          <h3 class="section-label section-label-challenge">🔥 Challenge tables</h3>
+          <div id="challenge-grid" class="table-grid"></div>
+        </div>
+
+        <label class="toggle-row toggle-challenge">
+          <input type="checkbox" id="challenge-toggle" />
+          <span>Challenge mode — tables up to 20×</span>
+        </label>
+
         <button type="button" id="btn-start" class="btn btn-primary btn-large">Start Practice!</button>
+        <button type="button" id="btn-wall" class="btn btn-secondary btn-wall hidden">★ My tables</button>
       </main>
     </section>
 
@@ -124,10 +137,12 @@
         <p id="summary-accuracy" class="summary-stat"></p>
         <p id="summary-rounds" class="summary-stat"></p>
         <p id="summary-time" class="summary-stat hidden"></p>
+        <p id="summary-mastered" class="summary-mastered hidden"></p>
         <p id="summary-message" class="summary-message"></p>
         <div class="summary-actions">
           <button type="button" id="btn-play-again" class="btn btn-primary">Play again</button>
           <button type="button" id="btn-summary-menu" class="btn btn-secondary">Change table</button>
+          <button type="button" id="btn-summary-wall" class="btn btn-secondary hidden">★ My tables</button>
         </div>
       </main>
     </section>
@@ -136,6 +151,35 @@
     <div id="celebration" class="celebration hidden" aria-hidden="true">
       <canvas id="celebration-canvas"></canvas>
     </div>
+
+    <!-- MASTERY WALL -->
+    <dialog id="dialog-wall" class="dialog dialog-large">
+      <h2 id="wall-title">My tables</h2>
+      <p id="wall-summary" class="wall-summary"></p>
+
+      <div id="wall-core" class="wall-grid"></div>
+
+      <div id="wall-challenge-group" class="hidden">
+        <h3 class="section-label section-label-challenge">🔥 Challenge tables</h3>
+        <div id="wall-challenge" class="wall-grid"></div>
+      </div>
+
+      <div class="wall-key">
+        <span><i class="key-swatch key-mastered"></i> Mastered</span>
+        <span><i class="key-swatch key-practising"></i> Practising</span>
+        <span><i class="key-swatch key-none"></i> Not started</span>
+      </div>
+
+      <div id="wall-detail" class="wall-detail hidden">
+        <h3 id="wall-detail-title"></h3>
+        <p id="wall-detail-status" class="wall-detail-status"></p>
+        <div id="wall-graph" class="wall-graph"></div>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-primary" data-close="dialog-wall">Done</button>
+      </div>
+    </dialog>
 
     <!-- TEACHER GATE -->
     <dialog id="dialog-gate" class="dialog">
@@ -219,6 +263,6 @@
     </dialog>
   </div>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

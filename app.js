@@ -7,8 +7,39 @@
   const STORAGE_STUDENTS = "FlashFlips_Students";
   const STORAGE_PIN_ENABLED = "FlashFlips_TeacherPinEnabled";
   const STORAGE_PIN = "FlashFlips_TeacherPin";
+  const STORAGE_CHALLENGE = "FlashFlips_ChallengeMode";
 
-  const SCHEMA_VERSION = 2;
+  const SCHEMA_VERSION = 3;
+
+  // Tables 1–12 are the core set. 13–20 only appear in Challenge mode.
+  const CORE_MAX = 12;
+  const CHALLENGE_MAX = 20;
+
+  /**
+   * Mastery thresholds.
+   *
+   * A card is "fast enough" if it was answered within baseMs + (perDigitMs x
+   * number of digits in the answer). The per-digit allowance exists because the
+   * measured time includes tapping the answer in: 6 is one tap, 56 is two, 238
+   * is three. Without it, the tables with bigger answers look slower than they
+   * are.
+   *
+   * A "clean pass" is a first-round-only run with no errors where every card
+   * came in under its own threshold. A table is mastered once passesNeeded of
+   * the last windowSize sessions on it were clean passes.
+   *
+   * These numbers are a starting point. Export the card times, look at what
+   * genuinely secure students actually score, and tune. Mastery is recalculated
+   * from stored attempt times every time it is displayed, never written into a
+   * session, so changing these values re-scores every session already recorded.
+   */
+  const MASTERY = {
+    baseMs: 1500,
+    perDigitMs: 500,
+    passesNeeded: 2,
+    windowSize: 3,
+    challengeMultiplier: 1.6, // 13–20 need working out, not recall — allow longer
+  };
 
   const MESSAGES = {
     perfect: [
@@ -59,7 +90,20 @@
     cardStartedAt: 0,
     attempts: [],
     lastInputMethod: "unknown",
+    challenge: false,
   };
+
+  // Challenge mode is a per-device setting: at school each child has their own
+  // 1:1 device, so the device is effectively the player. Players still exist
+  // for shared/home use (siblings), but the toggle is not stored per player.
+  function challengeEnabled() {
+    return localStorage.getItem(STORAGE_CHALLENGE) === "true";
+  }
+
+  function setChallengeEnabled(on) {
+    localStorage.setItem(STORAGE_CHALLENGE, on ? "true" : "false");
+    document.body.classList.toggle("challenge-mode", !!on);
+  }
 
   // --- DOM ---
   const $ = (sel) => document.querySelector(sel);
@@ -113,6 +157,12 @@
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
+  function range(from, to) {
+    const out = [];
+    for (let i = from; i <= to; i++) out.push(i);
+    return out;
+  }
+
   function shuffle(arr) {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {
@@ -160,7 +210,7 @@
   function getUrlTable() {
     const p = new URLSearchParams(location.search).get("table");
     const n = parseInt(p, 10);
-    return n >= 1 && n <= 15 ? n : null;
+    return n >= 1 && n <= CHALLENGE_MAX ? n : null;
   }
 
   // --- Celebration ---
@@ -446,6 +496,74 @@
     };
   }
 
+  // --- Mastery ---
+
+  /**
+   * How long this answer is allowed to take. Longer answers need more taps, so
+   * they get more time. Challenge tables get a further multiplier because a
+   * child partitioning 17×8 is doing a different job from one recalling 6×7,
+   * and holding both to the same bar would leave every challenge square amber
+   * forever.
+   */
+  function thresholdFor(answer, isChallenge) {
+    const digits = String(answer).length;
+    const base = MASTERY.baseMs + MASTERY.perDigitMs * digits;
+    return isChallenge ? base * MASTERY.challengeMultiplier : base;
+  }
+
+  /**
+   * A clean pass: finished in one round, nothing wrong, and every card inside
+   * its own threshold. Sessions recorded before attempt-level timing existed
+   * (schema v1) can't be judged, so they don't count either way.
+   */
+  function isCleanPass(session) {
+    if (!Array.isArray(session.attempts) || session.attempts.length === 0) return false;
+    if (session.roundsNeeded !== 1) return false;
+    return session.attempts.every((a) => {
+      if (!a.correct) return false;
+      const answer = a.answer != null ? a.answer : 10; // pre-v3 sessions stored no answer
+      return a.ms <= thresholdFor(answer, !!a.challenge);
+    });
+  }
+
+  /**
+   * Mastery state for one table: "none" (never practised), "practising", or
+   * "mastered". Derived from the stored attempt times every time it is asked
+   * for, so retuning MASTERY re-scores the whole history at once.
+   */
+  function masteryFor(student, table) {
+    const key = String(table);
+    const sessions = (student.sessions || [])
+      .filter((s) => s.tableKey === key)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    if (sessions.length === 0) return { state: "none", sessions: 0, cleanPasses: 0 };
+
+    const window = sessions.slice(-MASTERY.windowSize);
+    const cleanPasses = window.filter(isCleanPass).length;
+
+    return {
+      state: cleanPasses >= MASTERY.passesNeeded ? "mastered" : "practising",
+      sessions: sessions.length,
+      cleanPasses,
+      history: sessions,
+    };
+  }
+
+  /** Median first-pass time per session, for the per-table trend graph. */
+  function trendFor(student, table) {
+    const key = String(table);
+    return (student.sessions || [])
+      .filter((s) => s.tableKey === key)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map((s) => {
+        if (s.firstPassMedianMs != null) return s.firstPassMedianMs;
+        if (!Array.isArray(s.attempts)) return null;
+        return median(s.attempts.filter((a) => a.round === 1).map((a) => a.ms));
+      })
+      .filter((v) => v != null);
+  }
+
   // --- Storage ---
   function loadStudents() {
     try {
@@ -551,46 +669,93 @@
       hint.classList.add("hidden");
     }
 
+    $("#challenge-toggle").checked = game.challenge;
+    // The wall is built from saved sessions, so it is meaningless for a guest.
+    $("#btn-wall").classList.toggle("hidden", !s);
+    updateMixLabel();
     renderTableGrid();
+  }
+
+  function updateMixLabel() {
+    const label = $("#mix-label");
+    if (!label) return;
+    label.textContent = game.challenge
+      ? "Mix the challenge tables together 🎲"
+      : "Mix all tables together 🎲";
+  }
+
+  function makeTableButton(n, locked) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "table-btn";
+    if (isChallengeTable(n)) btn.classList.add("challenge");
+    btn.textContent = `${n}×`;
+    if (!game.mixTables && game.selectedTable === n) btn.classList.add("selected");
+    btn.disabled = locked;
+    btn.addEventListener("click", () => {
+      if (locked) return;
+      game.selectedTable = n;
+      game.mixTables = false;
+      $("#mix-tables").checked = false;
+      renderTableGrid();
+    });
+    return btn;
   }
 
   function renderTableGrid() {
     const grid = $("#table-grid");
+    const challengeWrap = $("#challenge-group");
+    const challengeGrid = $("#challenge-grid");
     grid.innerHTML = "";
+    challengeGrid.innerHTML = "";
     const locked = game.menuLocked && !game.mixTables;
-    for (let n = 1; n <= 15; n++) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "table-btn";
-      btn.textContent = `${n}×`;
-      const selected = !game.mixTables && game.selectedTable === n;
-      if (selected) btn.classList.add("selected");
-      btn.disabled = locked;
-      btn.addEventListener("click", () => {
-        if (locked) return;
-        game.selectedTable = n;
-        game.mixTables = false;
-        $("#mix-tables").checked = false;
-        renderTableGrid();
-      });
-      grid.appendChild(btn);
+
+    range(1, CORE_MAX).forEach((n) => grid.appendChild(makeTableButton(n, locked)));
+
+    // 13–20 only exist once Challenge mode is on, so a younger child never sees
+    // 18× as an option.
+    challengeWrap.classList.toggle("hidden", !game.challenge);
+    if (game.challenge) {
+      range(CORE_MAX + 1, CHALLENGE_MAX).forEach((n) =>
+        challengeGrid.appendChild(makeTableButton(n, locked))
+      );
     }
+
     $("#mix-tables").disabled = game.menuLocked;
   }
 
   // --- Game ---
   const MIX_DECK_SIZE = 20;
 
-  // Tables above 12 (13–15) go ×1–×15; the classic 1–12 tables stay ×1–×12.
+  function isChallengeTable(table) {
+    return table > CORE_MAX;
+  }
+
+  /**
+   * Core tables (1–12) run ×1–×12, as they always have.
+   *
+   * Challenge tables (13–20) run up to their own square: 13 goes to 13×13, 17
+   * to 17×17, and so on. Anything past the square is just the commutative twin
+   * of a fact already covered by a lower table — 17×14 lives in the 17 deck,
+   * so the 14 deck has no reason to carry it. Decks therefore grow from 13 to
+   * 20 cards with no fact appearing twice anywhere.
+   */
   function maxFactorFor(table) {
-    return table > 12 ? 15 : 12;
+    return isChallengeTable(table) ? table : CORE_MAX;
   }
 
   function buildDeck() {
     const cards = [];
-    const tables = game.mixTables
-      ? Array.from({ length: 15 }, (_, i) => i + 1)
-      : [game.selectedTable];
+    let tables;
+    if (game.mixTables) {
+      // Challenge mix draws only from 13–20; the standard mix stays on 1–12 so
+      // a 2× never lands in the same deck as a 19×.
+      tables = game.challenge
+        ? range(CORE_MAX + 1, CHALLENGE_MAX)
+        : range(1, CORE_MAX);
+    } else {
+      tables = [game.selectedTable];
+    }
     tables.forEach((t) => {
       const maxFactor = maxFactorFor(t);
       for (let i = 1; i <= maxFactor; i++) {
@@ -600,6 +765,7 @@
           multiplicand: i,
           question: `${t} × ${i}`,
           answer: t * i,
+          challenge: isChallengeTable(t),
         });
       }
     });
@@ -626,9 +792,19 @@
     stopTimers();
     startElapsed();
 
+    // The whole game screen picks up challenge colours when a challenge table
+    // is in play, so a teacher can see from across the room who is on 17× and
+    // ask why, if they are meant to be on their 4s.
+    const playingChallenge = game.mixTables
+      ? game.challenge
+      : isChallengeTable(game.selectedTable);
+    document.body.classList.toggle("playing-challenge", playingChallenge);
+
     showScreen("game");
     $("#game-table-label").textContent = game.mixTables
-      ? "Mixed Tables"
+      ? game.challenge
+        ? "Challenge Mix"
+        : "Mixed Tables"
       : `${game.selectedTable}× Tables`;
     renderGame();
   }
@@ -792,6 +968,10 @@
   function finishResolve(correct, card, elapsedMs) {
     game.attempts.push({
       q: card.question,
+      // The answer drives the per-digit time allowance, and the challenge flag
+      // keeps the two kinds of card comparable when the data is analysed.
+      answer: card.answer,
+      challenge: !!card.challenge,
       ms: Math.round(elapsedMs),
       correct: correct,
       round: game.roundNumber,
@@ -868,6 +1048,21 @@
 
     $("#summary-message").textContent = encouragingMessage(accuracy);
 
+    // Show the wall link only when there is a player to have a wall, and flag
+    // a table that has just tipped over into mastered.
+    const s = currentStudent();
+    const wallBtn = $("#btn-summary-wall");
+    wallBtn.classList.toggle("hidden", !s);
+    if (s && !game.mixTables) {
+      const m = masteryFor(s, game.selectedTable);
+      $("#summary-mastered").classList.toggle("hidden", m.state !== "mastered");
+      if (m.state === "mastered") {
+        $("#summary-mastered").textContent = `★ ${game.selectedTable}× table mastered!`;
+      }
+    } else {
+      $("#summary-mastered").classList.add("hidden");
+    }
+
     startCelebration();
     showScreen("summary");
   }
@@ -875,11 +1070,17 @@
   function saveSession({ accuracy, elapsed, rounds }) {
     const s = currentStudent();
     if (!s) return;
+    // Challenge mix is kept as its own key so it never averages in with the
+    // core mix — they are different decks doing different work.
     const tableKey = game.mixTables
-      ? "mix"
+      ? game.challenge
+        ? "mix-challenge"
+        : "mix"
       : String(game.selectedTable);
     const tableName = game.mixTables
-      ? "Mixed Tables"
+      ? game.challenge
+        ? "Challenge Mix"
+        : "Mixed Tables"
       : `${game.selectedTable}× Tables`;
     const firstPassMs = game.attempts
       .filter((a) => a.round === 1)
@@ -896,6 +1097,9 @@
       missedFacts: [...game.missedFacts],
       schemaVersion: SCHEMA_VERSION,
       cleanFirstPass: rounds === 1,
+      challenge: game.mixTables
+        ? game.challenge
+        : isChallengeTable(game.selectedTable),
       attempts: [...game.attempts],
       firstPassMedianMs: median(firstPassMs),
       dominantInput: dominantValue(game.attempts.map((a) => a.input)),
@@ -903,6 +1107,187 @@
     s.sessions = s.sessions || [];
     s.sessions.push(session);
     saveStudents();
+  }
+
+  // --- Mastery wall ---
+
+  function openMasteryWall() {
+    const s = currentStudent();
+    if (!s) return;
+    $("#wall-title").textContent = `${s.name}'s tables`;
+    renderMasteryWall(s);
+    $("#wall-detail").classList.add("hidden");
+    $("#dialog-wall").showModal();
+  }
+
+  function renderMasteryWall(student) {
+    const coreGrid = $("#wall-core");
+    const challengeGrid = $("#wall-challenge");
+    coreGrid.innerHTML = "";
+    challengeGrid.innerHTML = "";
+
+    let mastered = 0;
+    range(1, CORE_MAX).forEach((n) => {
+      const m = masteryFor(student, n);
+      if (m.state === "mastered") mastered++;
+      coreGrid.appendChild(makeWallTile(student, n, m));
+    });
+
+    // Challenge squares only appear once the mode is on, matching the menu.
+    $("#wall-challenge-group").classList.toggle("hidden", !game.challenge);
+    if (game.challenge) {
+      range(CORE_MAX + 1, CHALLENGE_MAX).forEach((n) => {
+        const m = masteryFor(student, n);
+        challengeGrid.appendChild(makeWallTile(student, n, m));
+      });
+    }
+
+    $("#wall-summary").textContent =
+      mastered === CORE_MAX
+        ? "🏆 Every table mastered. Outstanding."
+        : `${mastered} of ${CORE_MAX} tables mastered`;
+  }
+
+  function makeWallTile(student, table, m) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `wall-tile wall-${m.state}`;
+    if (isChallengeTable(table)) btn.classList.add("challenge");
+
+    const num = document.createElement("span");
+    num.className = "wall-num";
+    num.textContent = `${table}×`;
+    btn.appendChild(num);
+
+    const mark = document.createElement("span");
+    mark.className = "wall-mark";
+    mark.textContent =
+      m.state === "mastered" ? "★" : m.state === "practising" ? "•" : "";
+    btn.appendChild(mark);
+
+    const label =
+      m.state === "mastered"
+        ? "mastered"
+        : m.state === "practising"
+        ? `${m.cleanPasses} of ${MASTERY.passesNeeded} clean`
+        : "not started";
+    btn.setAttribute("aria-label", `${table} times table, ${label}`);
+
+    btn.addEventListener("click", () => showWallDetail(student, table, m));
+    return btn;
+  }
+
+  function showWallDetail(student, table, m) {
+    const box = $("#wall-detail");
+    box.classList.remove("hidden");
+    $("#wall-detail-title").textContent = `${table}× table`;
+
+    if (m.state === "none") {
+      $("#wall-detail-status").textContent = "Not practised yet — give it a go!";
+      $("#wall-graph").innerHTML = "";
+      return;
+    }
+
+    const statusText =
+      m.state === "mastered"
+        ? `★ Mastered — ${m.cleanPasses} clean runs out of your last ${Math.min(
+            m.sessions,
+            MASTERY.windowSize
+          )}`
+        : `${m.cleanPasses} clean run${m.cleanPasses === 1 ? "" : "s"} out of your last ${Math.min(
+            m.sessions,
+            MASTERY.windowSize
+          )} — ${MASTERY.passesNeeded} needed to master it`;
+    $("#wall-detail-status").textContent = statusText;
+
+    renderTrendGraph(trendFor(student, table));
+  }
+
+  /**
+   * Inline SVG line graph of median card time per session. Built by hand rather
+   * than with a chart library so the app keeps working offline with no CDN.
+   */
+  function renderTrendGraph(points) {
+    const wrap = $("#wall-graph");
+    wrap.innerHTML = "";
+    if (points.length < 2) {
+      wrap.innerHTML =
+        '<p class="wall-graph-empty">Play this table again to see your times improve.</p>';
+      return;
+    }
+
+    const W = 300;
+    const H = 120;
+    const padX = 34;
+    const padY = 20;
+
+    const max = Math.max(...points);
+    const min = Math.min(...points);
+    const span = max - min || 1;
+
+    const xFor = (i) =>
+      padX + (i / (points.length - 1)) * (W - padX * 2);
+    // Y is deliberately inverted: a FASTER time plots HIGHER. A child reads a
+    // rising line as "getting better", and on a raw time axis that would be
+    // exactly backwards. The axis is labelled so the direction is explicit.
+    const yFor = (v) =>
+      padY + ((v - min) / span) * (H - padY * 2);
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("class", "trend-svg");
+    svg.setAttribute("role", "img");
+    svg.setAttribute(
+      "aria-label",
+      `Your speed over ${points.length} sessions. Started at ${(
+        points[0] / 1000
+      ).toFixed(1)} seconds per card, now ${(
+        points[points.length - 1] / 1000
+      ).toFixed(1)} seconds per card. Higher on the chart means faster.`
+    );
+
+    const ns = "http://www.w3.org/2000/svg";
+
+    // Axis hint, so "up" is never ambiguous.
+    const fastLabel = document.createElementNS(ns, "text");
+    fastLabel.setAttribute("x", 4);
+    fastLabel.setAttribute("y", padY - 6);
+    fastLabel.setAttribute("class", "trend-axis");
+    fastLabel.textContent = "faster ↑";
+    svg.appendChild(fastLabel);
+
+    const line = document.createElementNS(ns, "polyline");
+    line.setAttribute(
+      "points",
+      points.map((v, i) => `${xFor(i)},${yFor(v)}`).join(" ")
+    );
+    line.setAttribute("class", "trend-line");
+    svg.appendChild(line);
+
+    points.forEach((v, i) => {
+      const dot = document.createElementNS(ns, "circle");
+      dot.setAttribute("cx", xFor(i));
+      dot.setAttribute("cy", yFor(v));
+      dot.setAttribute("r", i === points.length - 1 ? 5 : 3.5);
+      dot.setAttribute(
+        "class",
+        i === points.length - 1 ? "trend-dot trend-dot-last" : "trend-dot"
+      );
+      svg.appendChild(dot);
+    });
+
+    wrap.appendChild(svg);
+
+    const first = points[0];
+    const last = points[points.length - 1];
+    const caption = document.createElement("p");
+    caption.className = "wall-graph-caption";
+    const diff = (first - last) / 1000;
+    caption.textContent =
+      diff > 0.2
+        ? `⚡ ${diff.toFixed(1)}s faster than when you started — ${(last / 1000).toFixed(1)}s per card now`
+        : `${(last / 1000).toFixed(1)}s per card`;
+    wrap.appendChild(caption);
   }
 
   // --- Numpad ---
@@ -1017,10 +1402,14 @@
     grid.innerHTML = "";
     const mix = $("#assign-mix").checked;
     wrap.classList.toggle("hidden", mix);
-    for (let n = 1; n <= 15; n++) {
+    // Teacher-side grid: shows the challenge tables only when the device has
+    // challenge mode on, matching what the child can actually pick.
+    const top = game.challenge ? CHALLENGE_MAX : CORE_MAX;
+    range(1, top).forEach((n) => {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "table-btn";
+      if (isChallengeTable(n)) btn.classList.add("challenge");
       btn.textContent = `${n}×`;
       if (assignSelectedTable === n) btn.classList.add("selected");
       btn.addEventListener("click", () => {
@@ -1028,12 +1417,12 @@
         renderAssignGrid();
       });
       grid.appendChild(btn);
-    }
+    });
   }
 
   function exportCSV() {
     const rows = [
-      "Player,Date,Table,Total Cards,Correct,Incorrect,Correct %,Rounds,Time (s),Timer On,Missed Facts",
+      "Player,Date,Table,Challenge,Total Cards,Correct,Incorrect,Correct %,Rounds,Time (s),Clean Pass,Missed Facts",
     ];
     students.forEach((st) => {
       (st.sessions || []).forEach((sess) => {
@@ -1049,13 +1438,14 @@
             `"${st.name.replace(/"/g, '""')}"`,
             `"${d}"`,
             `"${sess.tableName}"`,
+            sess.challenge ? "Yes" : "No",
             sess.totalCards,
             sess.correctCount,
             inc,
             `${pct}%`,
             sess.roundsNeeded,
             time,
-            sess.timerEnabled ? "Yes" : "No",
+            isCleanPass(sess) ? "Yes" : "No",
             `"${missed.replace(/"/g, '""')}"`,
           ].join(",")
         );
@@ -1069,21 +1459,38 @@
     URL.revokeObjectURL(a.href);
   }
 
+  /**
+   * Card-level export — this is the file to calibrate MASTERY against. Answer
+   * and Digits are included because the time includes tapping the answer in,
+   * so a three-digit answer is legitimately slower than a one-digit one.
+   * Threshold/Under Threshold show what the current settings would score.
+   */
   function exportAttemptsCSV() {
-    const rows = ["Player,Date,Table,Question,Time (ms),Correct,Round,Input"];
+    const rows = [
+      "Player,Date,Table,Challenge,Question,Answer,Digits,Time (ms),Threshold (ms),Under Threshold,Correct,Round,Input",
+    ];
     students.forEach((st) => {
       (st.sessions || []).forEach((sess) => {
         // Older sessions (schema v1) have no attempts array — skip them.
         if (!Array.isArray(sess.attempts)) return;
         const d = new Date(sess.date).toLocaleString();
         sess.attempts.forEach((att) => {
+          const answer = att.answer != null ? att.answer : "";
+          const digits = answer === "" ? "" : String(answer).length;
+          const thr =
+            answer === "" ? "" : Math.round(thresholdFor(answer, !!att.challenge));
           rows.push(
             [
               `"${st.name.replace(/"/g, '""')}"`,
               `"${d}"`,
               `"${sess.tableName}"`,
+              att.challenge ? "Yes" : "No",
               `"${String(att.q).replace(/"/g, '""')}"`,
+              answer,
+              digits,
               att.ms,
+              thr,
+              thr === "" ? "" : att.ms <= thr ? "Yes" : "No",
               att.correct ? "Yes" : "No",
               att.round,
               att.input,
@@ -1116,6 +1523,10 @@
       if (!s.sessions) s.sessions = [];
     });
 
+    // Restore the challenge setting for this device.
+    game.challenge = challengeEnabled();
+    setChallengeEnabled(game.challenge);
+
     const urlTable = getUrlTable();
 
     buildNumpad();
@@ -1134,6 +1545,21 @@
       game.mixTables = e.target.checked;
       renderTableGrid();
     });
+
+    $("#challenge-toggle").addEventListener("change", (e) => {
+      game.challenge = e.target.checked;
+      setChallengeEnabled(game.challenge);
+      // Turning challenge off while sitting on 17× would leave an invisible
+      // table selected, so fall back to a core one.
+      if (!game.challenge && isChallengeTable(game.selectedTable)) {
+        game.selectedTable = 2;
+      }
+      updateMixLabel();
+      renderTableGrid();
+    });
+
+    $("#btn-wall").addEventListener("click", openMasteryWall);
+    $("#btn-summary-wall").addEventListener("click", openMasteryWall);
 
     $("#btn-start").addEventListener("click", () => {
       game.mixTables = $("#mix-tables").checked;

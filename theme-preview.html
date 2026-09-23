@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flash Flips — Theme Preview</title>
+<style>
+  * , *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    font-family: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, sans-serif;
+    background: #0f0f17;
+    color: #fff;
+    padding: 20px 12px 60px;
+  }
+
+  .page-title { text-align: center; font-weight: 900; font-size: 1.4rem; margin: 0 0 4px; }
+  .page-sub { text-align: center; color: #9aa0b4; margin: 0 0 20px; font-size: 0.9rem; }
+
+  .switcher {
+    display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 20;
+    padding: 10px; margin: 0 auto 24px; max-width: 720px;
+    background: rgba(20,20,32,0.85); backdrop-filter: blur(8px);
+    border-radius: 16px;
+  }
+  .switcher button {
+    font: inherit; font-weight: 800; cursor: pointer;
+    border: 2px solid #2c2c40; background: #1a1a28; color: #cfd3e6;
+    padding: 8px 14px; border-radius: 999px; transition: all .15s;
+  }
+  .switcher button.active { background: #fff; color: #111; border-color: #fff; }
+
+  .theme-note {
+    max-width: 760px; margin: 0 auto 18px; text-align: center;
+    color: #b9bed0; font-size: 0.95rem; min-height: 1.4em;
+  }
+
+  .stage {
+    display: flex; gap: 24px; justify-content: center; flex-wrap: wrap;
+    max-width: 900px; margin: 0 auto;
+  }
+
+  /* A phone-ish frame that hosts each mock screen */
+  .frame {
+    width: 360px; max-width: 92vw; height: 720px; max-height: 82vh;
+    border-radius: 34px; overflow: hidden; position: relative;
+    box-shadow: 0 30px 70px rgba(0,0,0,0.5);
+    border: 8px solid #05050a;
+  }
+  .frame-label {
+    text-align: center; color: #8b90a6; font-size: 0.8rem; font-weight: 700;
+    margin: 8px 0 0; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .screen {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    padding: 22px 18px; overflow: hidden;
+  }
+
+  /* ---------- shared skeleton (themes override the visuals) ---------- */
+  .t-title { font-size: 1.9rem; font-weight: 900; text-align: center; margin: 6px 0 2px; }
+  .t-sub { text-align: center; font-weight: 600; margin: 0 0 18px; }
+  .players-label { text-align: center; font-weight: 700; margin: 0 0 12px; font-size: 0.95rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .tile { border-radius: 18px; padding: 16px 10px; text-align: center; cursor: pointer; }
+  .avatar { width: 52px; height: 52px; border-radius: 50%; margin: 0 auto 8px;
+            display: flex; align-items: center; justify-content: center; font-weight: 900; color:#fff; }
+  .tile-name { font-weight: 800; }
+  .btn { font: inherit; font-weight: 800; border: none; cursor: pointer; width: 100%;
+         padding: 15px; border-radius: 16px; font-size: 1.1rem; }
+  .btn-2nd { font: inherit; font-weight: 800; border: none; cursor: pointer; width: 100%;
+             padding: 12px; border-radius: 14px; font-size: 1rem; }
+  .spacer { flex: 1; }
+  .foot { text-align: center; margin-top: 14px; }
+  .foot small { display:block; margin-top: 8px; font-size: 0.75rem; }
+
+  /* game skeleton */
+  .g-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .g-pill { padding: 5px 12px; border-radius: 999px; font-weight: 800; font-size: 0.85rem; }
+  .g-table { font-weight: 900; }
+  .g-scores { display: flex; gap: 6px; }
+  .g-left { text-align: center; font-weight: 700; font-size: 0.85rem; margin: 4px 0 10px; }
+  .card {
+    width: 210px; height: 128px; border-radius: 20px; margin: 6px auto 0;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-weight: 900; font-size: 2rem; color: #fff;
+  }
+  .typed { text-align: center; font-size: 2.2rem; font-weight: 900; margin: 14px 0 8px; }
+  .pad { display: grid; grid-template-columns: repeat(3,1fr); gap: 9px; }
+  .pad button { font: inherit; font-weight: 800; border: none; cursor: pointer;
+                padding: 14px 0; border-radius: 14px; font-size: 1.3rem; }
+
+  /* =========================================================
+     THEME 1 — PLAYFUL & VIBRANT
+     ========================================================= */
+  [data-theme="playful"] .frame { background: linear-gradient(160deg,#fff4d6 0%,#ffe0ec 55%,#e3f0ff 100%); }
+  [data-theme="playful"] .screen::before {
+    content:""; position:absolute; inset:0; z-index:0;
+    background:
+      radial-gradient(closest-side, rgba(255,107,53,.45), transparent) -30px -20px/220px 220px no-repeat,
+      radial-gradient(closest-side, rgba(124,58,237,.40), transparent) 260px 120px/260px 260px no-repeat,
+      radial-gradient(closest-side, rgba(6,182,212,.40), transparent) -40px 520px/260px 260px no-repeat;
+    filter: blur(6px); animation: floaty 9s ease-in-out infinite alternate;
+  }
+  @keyframes floaty { to { transform: translateY(-14px) scale(1.05); } }
+  [data-theme="playful"] .screen > * { position: relative; z-index: 1; }
+  [data-theme="playful"] .t-title {
+    background: linear-gradient(90deg,#ff6b35,#e91e63,#7c3aed);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: bob 2.2s ease-in-out infinite;
+  }
+  @keyframes bob { 50% { transform: translateY(-5px); } }
+  [data-theme="playful"] .t-sub, [data-theme="playful"] .players-label { color:#7a5bb0; }
+  [data-theme="playful"] .tile { background: rgba(255,255,255,.92); box-shadow: 0 8px 18px rgba(124,58,237,.18); transition: transform .12s; }
+  [data-theme="playful"] .tile:hover { transform: translateY(-3px); }
+  [data-theme="playful"] .tile-name { color:#3a2b5a; }
+  /* squishy 3D buttons */
+  [data-theme="playful"] .btn {
+    background: linear-gradient(180deg,#ff8e53,#ff6b35); color:#fff;
+    box-shadow: 0 6px 0 #d24f1e, 0 12px 22px rgba(255,107,53,.4); transition: all .08s;
+  }
+  [data-theme="playful"] .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #d24f1e, 0 6px 12px rgba(255,107,53,.4); }
+  [data-theme="playful"] .btn-2nd { background:#efe7ff; color:#7c3aed; box-shadow: 0 4px 0 #cdbcf5; }
+  [data-theme="playful"] .foot small { color:#8a7bb0; }
+  [data-theme="playful"] .g-title-txt, [data-theme="playful"] .g-table {
+    background: linear-gradient(90deg,#ff6b35,#e91e63); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  [data-theme="playful"] .g-pill { background:#fff; box-shadow:0 3px 8px rgba(0,0,0,.08); }
+  [data-theme="playful"] .g-pill.ok { color:#22a34a; } [data-theme="playful"] .g-pill.no { color:#e5484d; }
+  [data-theme="playful"] .g-left { color:#7a5bb0; }
+  [data-theme="playful"] .card {
+    background: linear-gradient(145deg,#8b6fc7,#5c35cc); box-shadow: 0 14px 30px rgba(92,53,204,.4);
+    position: relative; overflow: hidden;
+  }
+  [data-theme="playful"] .card::after { content:""; position:absolute; top:-40%; left:-30%; width:80%; height:160%;
+    background: linear-gradient(105deg, transparent, rgba(255,255,255,.35), transparent); transform: rotate(8deg); }
+  [data-theme="playful"] .typed { color:#5c35cc; }
+  [data-theme="playful"] .pad button { background: rgba(255,255,255,.95); color:#5c35cc; box-shadow: 0 4px 0 #d9cef2; }
+  [data-theme="playful"] .pad button.sub { background: linear-gradient(180deg,#ff8e53,#ff6b35); color:#fff; box-shadow: 0 4px 0 #d24f1e; }
+
+  /* =========================================================
+     THEME 2 — CLEAN & MODERN (frosted glass)
+     ========================================================= */
+  [data-theme="modern"] .frame { background: linear-gradient(160deg,#eef1fb 0%,#f7f3fb 50%,#eafaf7 100%); }
+  [data-theme="modern"] .screen { padding: 26px 20px; }
+  [data-theme="modern"] .t-title { color:#1f2540; letter-spacing:-0.02em; font-size: 1.75rem; }
+  [data-theme="modern"] .t-sub, [data-theme="modern"] .players-label { color:#77809c; font-weight: 600; }
+  [data-theme="modern"] .tile {
+    background: rgba(255,255,255,.6); backdrop-filter: blur(14px);
+    border: 1px solid rgba(255,255,255,.8); box-shadow: 0 10px 30px rgba(40,50,90,.10);
+  }
+  [data-theme="modern"] .tile-name { color:#2b3252; font-weight: 700; }
+  [data-theme="modern"] .avatar { box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+  [data-theme="modern"] .btn { background:#4f46e5; color:#fff; box-shadow: 0 10px 24px rgba(79,70,229,.32); border-radius: 14px; }
+  [data-theme="modern"] .btn:active { transform: scale(.98); }
+  [data-theme="modern"] .btn-2nd { background: rgba(255,255,255,.7); backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,.9); color:#4f46e5; }
+  [data-theme="modern"] .foot small { color:#9aa1ba; }
+  [data-theme="modern"] .g-table, [data-theme="modern"] .g-title-txt { color:#1f2540; }
+  [data-theme="modern"] .g-pill { background: rgba(255,255,255,.7); backdrop-filter: blur(8px); border:1px solid rgba(255,255,255,.9); }
+  [data-theme="modern"] .g-pill.ok { color:#0ea371; } [data-theme="modern"] .g-pill.no { color:#e5484d; }
+  [data-theme="modern"] .g-left { color:#77809c; }
+  [data-theme="modern"] .card { background:#fff; color:#1f2540; box-shadow: 0 18px 40px rgba(40,50,90,.14); border: 1px solid #eef0f7; }
+  [data-theme="modern"] .card .num { color:#4f46e5; }
+  [data-theme="modern"] .typed { color:#4f46e5; }
+  [data-theme="modern"] .pad button { background: rgba(255,255,255,.7); backdrop-filter: blur(8px);
+    border:1px solid rgba(255,255,255,.9); color:#2b3252; }
+  [data-theme="modern"] .pad button.sub { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+
+  /* =========================================================
+     THEME 3 — BOLD ARCADE / NEON
+     ========================================================= */
+  [data-theme="arcade"] .frame { background: radial-gradient(120% 90% at 50% 0%, #1b1145 0%, #0a0a1a 60%, #05050d 100%); }
+  [data-theme="arcade"] .screen::before {
+    content:""; position:absolute; inset:0;
+    background:
+      radial-gradient(closest-side, rgba(0,229,255,.22), transparent) -20px 40px/240px 240px no-repeat,
+      radial-gradient(closest-side, rgba(255,0,153,.22), transparent) 240px 260px/260px 260px no-repeat,
+      radial-gradient(closest-side, rgba(179,255,0,.16), transparent) 40px 560px/240px 240px no-repeat;
+  }
+  [data-theme="arcade"] .screen > * { position: relative; z-index: 1; }
+  [data-theme="arcade"] .t-title {
+    color:#fff; text-shadow: 0 0 8px #00e5ff, 0 0 20px #00e5ff, 0 0 40px rgba(0,229,255,.6); letter-spacing: 0.02em;
+  }
+  [data-theme="arcade"] .t-sub { color:#7ef0ff; }
+  [data-theme="arcade"] .players-label { color:#9aa0c9; }
+  [data-theme="arcade"] .tile { background: rgba(20,20,45,.7); border: 1.5px solid rgba(0,229,255,.35);
+    box-shadow: 0 0 18px rgba(0,229,255,.15) inset, 0 8px 20px rgba(0,0,0,.5); }
+  [data-theme="arcade"] .tile-name { color:#e8ebff; }
+  [data-theme="arcade"] .btn { background: linear-gradient(180deg,#ff2e97,#ff0099); color:#fff;
+    box-shadow: 0 0 14px rgba(255,0,153,.7), 0 0 30px rgba(255,0,153,.4); border: 1.5px solid #ff7bc3; }
+  [data-theme="arcade"] .btn:active { transform: scale(.98); }
+  [data-theme="arcade"] .btn-2nd { background: transparent; color:#00e5ff; border: 2px solid #00e5ff;
+    box-shadow: 0 0 12px rgba(0,229,255,.4); }
+  [data-theme="arcade"] .foot small { color:#6b7099; }
+  [data-theme="arcade"] .g-table, [data-theme="arcade"] .g-title-txt { color:#fff; text-shadow: 0 0 10px #ff0099; }
+  [data-theme="arcade"] .g-pill { background: rgba(20,20,45,.8); border:1px solid rgba(255,255,255,.15); }
+  [data-theme="arcade"] .g-pill.ok { color:#b3ff00; } [data-theme="arcade"] .g-pill.no { color:#ff5470; }
+  [data-theme="arcade"] .g-left { color:#9aa0c9; }
+  [data-theme="arcade"] .card { background: linear-gradient(160deg,#241a5e,#140d33); color:#fff;
+    border: 2px solid #7c3aed; box-shadow: 0 0 22px rgba(124,58,237,.7), 0 0 44px rgba(124,58,237,.35); }
+  [data-theme="arcade"] .card .num { color:#00e5ff; text-shadow: 0 0 12px #00e5ff; }
+  [data-theme="arcade"] .typed { color:#00e5ff; text-shadow: 0 0 12px rgba(0,229,255,.7); }
+  [data-theme="arcade"] .pad button { background: rgba(20,20,45,.85); color:#e8ebff; border:1.5px solid rgba(0,229,255,.3); }
+  [data-theme="arcade"] .pad button.sub { background: linear-gradient(180deg,#b3ff00,#8bd400); color:#0a0a1a;
+    box-shadow: 0 0 14px rgba(179,255,0,.6); border-color:#d8ff7a; }
+</style>
+</head>
+<body>
+  <h1 class="page-title">⚡ Flash Flips — Theme Preview</h1>
+  <p class="page-sub">Tap a style below. Nothing here touches the live app — it's just for choosing a look.</p>
+
+  <div class="switcher">
+    <button data-set="playful" class="active">1 · Playful &amp; Vibrant</button>
+    <button data-set="modern">2 · Clean &amp; Modern</button>
+    <button data-set="arcade">3 · Bold Arcade</button>
+  </div>
+  <p class="theme-note" id="note"></p>
+
+  <div class="stage" id="stage" data-theme="playful">
+    <!-- HOME MOCK -->
+    <div>
+      <div class="frame">
+        <div class="screen">
+          <h2 class="t-title">⚡ Flash Flips ⚡</h2>
+          <p class="t-sub">Times tables practice</p>
+          <p class="players-label">Tap your name to start</p>
+          <div class="grid">
+            <div class="tile"><div class="avatar" style="background:#FF6B6B">AM</div><div class="tile-name">Amy</div></div>
+            <div class="tile"><div class="avatar" style="background:#4CAF50">BE</div><div class="tile-name">Ben</div></div>
+            <div class="tile"><div class="avatar" style="background:#00BCD4">CH</div><div class="tile-name">Chloe</div></div>
+            <div class="tile"><div class="avatar" style="background:#9C27B0">DA</div><div class="tile-name">Dan</div></div>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn-2nd">Practise without saving</button>
+          <div class="foot">
+            <div style="height:10px"></div>
+            <button class="btn-2nd">👥 Manage Players</button>
+            <small>Progress is saved on this device only.</small>
+          </div>
+        </div>
+      </div>
+      <p class="frame-label">Home</p>
+    </div>
+
+    <!-- GAME MOCK -->
+    <div>
+      <div class="frame">
+        <div class="screen">
+          <div class="g-bar">
+            <span class="g-pill g-title-txt">← Menu</span>
+            <span class="g-table">7× Tables</span>
+            <span class="g-scores"><span class="g-pill ok">✓ 5</span><span class="g-pill no">✕ 1</span></span>
+          </div>
+          <p class="g-left">6 cards left</p>
+          <div class="spacer" style="max-height:20px"></div>
+          <div class="card"><span>7</span><span style="opacity:.7">×</span><span>8</span><span style="opacity:.7">=</span></div>
+          <div class="spacer"></div>
+          <p class="typed">56</p>
+          <div class="pad">
+            <button>1</button><button>2</button><button>3</button>
+            <button>4</button><button>5</button><button>6</button>
+            <button>7</button><button>8</button><button>9</button>
+            <button>⌫</button><button>0</button><button class="sub">✓</button>
+          </div>
+        </div>
+      </div>
+      <p class="frame-label">Game</p>
+    </div>
+  </div>
+
+<script>
+  const notes = {
+    playful: "Playful & Vibrant — light, warm, friendly. Floating colour blobs, a gently bobbing title, glossy cards, and 'squishy' 3D buttons that press down. Best fit for kids and home use.",
+    modern: "Clean & Modern — calm frosted-glass panels, refined type, lots of whitespace, a single indigo accent. Looks premium and grown-up.",
+    arcade: "Bold Arcade — dark background with neon cyan / magenta / lime glow, glowing chunky buttons and cards. Highest energy, most 'video game' feel."
+  };
+  const stage = document.getElementById('stage');
+  const note = document.getElementById('note');
+  const setTheme = (t) => {
+    stage.dataset.theme = t;
+    note.textContent = notes[t];
+    document.querySelectorAll('.switcher button').forEach(b =>
+      b.classList.toggle('active', b.dataset.set === t));
+  };
+  document.querySelectorAll('.switcher button').forEach(b =>
+    b.addEventListener('click', () => setTheme(b.dataset.set)));
+  setTheme('playful');
+</script>
+</body>
+</html>
