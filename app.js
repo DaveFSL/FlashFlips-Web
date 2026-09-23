@@ -621,6 +621,8 @@
     });
     const dark = challengePalette && (name === "game" || name === "summary");
     document.body.classList.toggle("playing-challenge", dark);
+    // Confetti belongs to the summary; leaving it should take the party too.
+    if (name !== "summary") stopCelebration();
   }
 
   // --- Home ---
@@ -712,7 +714,33 @@
     btn.type = "button";
     btn.className = "table-btn";
     if (isChallengeTable(n)) btn.classList.add("challenge");
-    btn.textContent = `${n}×`;
+
+    const num = document.createElement("span");
+    num.className = "table-num";
+    num.textContent = `${n}×`;
+    btn.appendChild(num);
+
+    // The chooser doubles as the mastery wall: a kid picks their 7s
+    // because they can see 7 isn't gold yet. Selection is shown with a
+    // ring and a tick, a separate channel from the fill, so the two
+    // never compete.
+    const student = currentStudent();
+    if (student) {
+      const m = masteryFor(student, n);
+      btn.classList.add(`state-${m.state}`);
+      btn.appendChild(makeStateMark(m));
+      btn.setAttribute(
+        "aria-label",
+        `${n} times table, ${
+          m.state === "mastered"
+            ? "mastered"
+            : m.state === "practising"
+            ? `${m.cleanPasses} of ${MASTERY.passesNeeded} clean runs`
+            : "not started"
+        }`
+      );
+    }
+
     if (!game.mixTables && game.selectedTable === n) btn.classList.add("selected");
     btn.disabled = locked;
     btn.addEventListener("click", () => {
@@ -745,6 +773,26 @@
     }
 
     $("#mix-tables").disabled = game.menuLocked;
+
+    // The chooser only carries mastery colours when someone is signed in,
+    // so the count and the key appear and disappear with them.
+    const student = currentStudent();
+    const count = $("#menu-mastered");
+    const key = $("#menu-key");
+    if (!student) {
+      count.classList.add("hidden");
+      key.classList.add("hidden");
+      return;
+    }
+    const mastered = range(1, CORE_MAX).filter(
+      (n) => masteryFor(student, n).state === "mastered"
+    ).length;
+    count.textContent =
+      mastered === CORE_MAX
+        ? "🏆 Every table mastered"
+        : `${mastered} of ${CORE_MAX} mastered`;
+    count.classList.remove("hidden");
+    key.classList.remove("hidden");
   }
 
   // --- Game ---
@@ -1218,6 +1266,29 @@
         : `${mastered} of ${CORE_MAX} tables mastered`;
   }
 
+  // A star once mastered; until then a filled pip per clean run and a
+  // hollow one for what's still needed, so a tile says how close you are
+  // rather than just that you've started. Shared by the mastery wall and
+  // the table chooser.
+  function makeStateMark(m) {
+    if (m.state === "mastered") {
+      const mark = document.createElement("span");
+      mark.className = "wall-mark";
+      mark.textContent = "★";
+      return mark;
+    }
+    const pips = document.createElement("span");
+    pips.className = "wall-pips";
+    if (m.state === "practising") {
+      for (let i = 0; i < MASTERY.passesNeeded; i++) {
+        const pip = document.createElement("i");
+        pip.className = i < m.cleanPasses ? "wall-pip filled" : "wall-pip";
+        pips.appendChild(pip);
+      }
+    }
+    return pips;
+  }
+
   function makeWallTile(student, table, m) {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -1229,11 +1300,7 @@
     num.textContent = `${table}×`;
     btn.appendChild(num);
 
-    const mark = document.createElement("span");
-    mark.className = "wall-mark";
-    mark.textContent =
-      m.state === "mastered" ? "★" : m.state === "practising" ? "•" : "";
-    btn.appendChild(mark);
+    btn.appendChild(makeStateMark(m));
 
     const label =
       m.state === "mastered"
@@ -1251,6 +1318,11 @@
     const box = $("#wall-detail");
     box.classList.remove("hidden");
     $("#wall-detail-title").textContent = `${table}× table`;
+    // The detail opens below the grid, which on a short screen is below
+    // the fold — bring it into view so the tap visibly does something.
+    requestAnimationFrame(() =>
+      box.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    );
 
     if (m.state === "none") {
       $("#wall-detail-status").textContent = "Not practised yet — give it a go!";
@@ -1293,15 +1365,17 @@
 
     const max = Math.max(...points);
     const min = Math.min(...points);
-    const span = max - min || 1;
+    const span = max - min;
 
     const xFor = (i) =>
       padX + (i / (points.length - 1)) * (W - padX * 2);
     // Y is deliberately inverted: a FASTER time plots HIGHER. A child reads a
     // rising line as "getting better", and on a raw time axis that would be
     // exactly backwards. The axis is labelled so the direction is explicit.
+    // Identical times have no span to scale against, so they run level
+    // through the middle rather than pinning to the top of the box.
     const yFor = (v) =>
-      padY + ((v - min) / span) * (H - padY * 2);
+      span === 0 ? H / 2 : padY + ((v - min) / span) * (H - padY * 2);
 
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -1407,6 +1481,35 @@
     $("#dialog-manage").showModal();
   }
 
+  // "7 of 12 mastered · last played Tuesday" — the one line a teacher needs
+  // beside a name. Days are named for the last week, then dated.
+  function progressLine(student) {
+    const sessions = student.sessions || [];
+    if (sessions.length === 0) return "Not started yet";
+
+    const mastered = range(1, CORE_MAX).filter(
+      (n) => masteryFor(student, n).state === "mastered"
+    ).length;
+
+    const last = sessions.reduce((a, b) =>
+      new Date(a.date) > new Date(b.date) ? a : b
+    );
+    const then = new Date(last.date);
+    const midnight = (d) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const days = Math.round((midnight(new Date()) - midnight(then)) / 86400000);
+    const when =
+      days <= 0
+        ? "today"
+        : days === 1
+        ? "yesterday"
+        : days < 7
+        ? then.toLocaleDateString(undefined, { weekday: "long" })
+        : then.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
+    return `${mastered} of ${CORE_MAX} mastered · last played ${when}`;
+  }
+
   function renderManageList() {
     const ul = $("#manage-list");
     ul.innerHTML = "";
@@ -1415,7 +1518,12 @@
       .sort((a, b) => a.name.localeCompare(b.name))
       .forEach((s) => {
         const li = document.createElement("li");
-        li.innerHTML = `<span>${escapeHtml(s.name)}</span>`;
+        // A teacher scanning a class list wants the state of play per name,
+        // not a tap into each child's wall.
+        li.innerHTML = `<span class="manage-who">
+            <b>${escapeHtml(s.name)}</b>
+            <small class="manage-progress">${escapeHtml(progressLine(s))}</small>
+          </span>`;
         const del = document.createElement("button");
         del.type = "button";
         del.className = "btn btn-secondary";
@@ -1606,6 +1714,11 @@
     if (urlTable) {
       // QR / direct link (e.g. ?table=3): jump straight into that table as a guest, nothing locked.
       startGuestPractice(urlTable);
+    } else if (students.length === 1) {
+      // One player means one device, one child — a "who's playing?" screen
+      // with a single name on it is a tap that asks nothing. Go straight in;
+      // the name chip on the menu goes back when a sibling needs adding.
+      selectStudent(students[0].id);
     } else {
       showScreen("home");
     }
@@ -1648,11 +1761,13 @@
       refreshMenu();
     });
 
-    $("#btn-home").addEventListener("click", () => {
+    const goHome = () => {
       currentStudentId = null;
       showScreen("home");
       renderStudents();
-    });
+    };
+    $("#btn-home").addEventListener("click", goHome);
+    $("#menu-playing-as").addEventListener("click", goHome);
 
     $("#btn-menu").addEventListener("click", () => {
       stopTimers();

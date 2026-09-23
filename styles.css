@@ -36,6 +36,8 @@
 
   --gold: #eab308;
   --gold-deep: #a16207;
+  --amber: #f59e0b;
+  --amber-ink: #b45309;
 
   --card-w: min(470px, 46vw);
   --card-h: calc(var(--card-w) * 0.592);
@@ -116,13 +118,16 @@ body {
 /* ---------- Home ---------- */
 /* The menu panel floats in the middle rather than clinging to the top —
    on a landscape iPad that was a screen and a half of empty ground.   */
-#screen-menu { justify-content: center; position: relative; }
-#screen-menu .bar {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  left: 16px;
-  right: 16px;
-  margin: 0;
+/* Bar stays in flow at the top; the panel takes the leftover space and
+   floats in the middle of it. On a landscape iPad the old top-anchored
+   panel left a screen and a half of empty ground below it. */
+#screen-menu { justify-content: flex-start; }
+/* Wider than a standard panel: the tiles now carry mastery state and a
+   mark, so they need the room the screen already had going spare. */
+#screen-menu .menu-main {
+  margin-top: auto;
+  margin-bottom: auto;
+  max-width: 800px;
 }
 #screen-home { justify-content: flex-start; }
 #screen-home .hero { margin-top: clamp(20px, 11vh, 110px); }
@@ -263,15 +268,36 @@ body {
   max-width: 1120px;
   margin: 0 auto 0.5rem;
   width: 100%;
+  position: relative;
 }
+/* Centred on the bar itself, not on the space left over beside the
+   button — otherwise a bar with nothing on its right sits off-centre. */
 .bar-center {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
+  white-space: nowrap;
+  pointer-events: none;
 }
-.playing-as { font-weight: 600; color: var(--accent-deep); }
+/* Tappable: "Playing as Dave" is where you look to switch player, so it
+   is the second route back to the name list alongside ← Home. */
+.playing-as {
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent-deep);
+  background: none;
+  border: none;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.playing-as:hover { background: var(--raised-soft); }
+.playing-as:empty { display: none; }
 
 .section-label {
   font-family: var(--display);
@@ -285,34 +311,111 @@ body {
 /* ---------- Table grids ---------- */
 .table-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.6rem;
   margin: 1rem 0;
+}
+/* 13–20 in a single row of eight: with challenge mode on, a second row of
+   squares pushed Start Practice off the bottom of a landscape iPad. */
+#challenge-grid { grid-template-columns: repeat(8, 1fr); gap: 0.45rem; }
+@media (max-width: 560px) {
+  .table-grid { grid-template-columns: repeat(4, 1fr); }
+  #challenge-grid { grid-template-columns: repeat(4, 1fr); }
 }
 .table-grid.compact { grid-template-columns: repeat(auto-fit, minmax(54px, 1fr)); }
 .table-btn {
-  aspect-ratio: 1.2;
+  position: relative;
+  aspect-ratio: 1;
   border: 2px solid var(--accent-line);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--accent-tint);
   color: var(--accent-deep);
   font-family: var(--display);
   font-weight: 600;
-  font-size: 1.05rem;
+  font-size: clamp(1.1rem, 2.4vw, 1.5rem);
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  transition: transform 0.12s ease;
 }
-.table-btn.selected {
-  background: var(--accent);
-  color: #fff;
-  border-color: transparent;
-}
-.table-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.table-btn:active { transform: scale(0.95); }
+.table-btn .wall-mark { font-size: 0.8em; line-height: 1; }
+/* Reserves the mark's row so tiles don't jump height between states. */
+.table-btn .wall-pips { min-height: 9px; }
+
 .table-btn.challenge {
   border-color: #cfe9e5;
   background: #eefaf8;
   color: #0f5f59;
 }
-.table-btn.challenge.selected { background: #0f766e; color: #fff; border-color: transparent; }
+
+/* Mastery state paints the fill; selection is a ring and a tick, so the
+   two never compete for the same pixels. Declared after .challenge so a
+   mastered 17× goes gold rather than staying teal. */
+.table-btn.state-none { background: var(--accent-tint); border-color: var(--accent-line); }
+.table-btn.challenge.state-none { background: #eefaf8; border-color: #cfe9e5; color: #0f5f59; }
+.table-btn.state-practising {
+  background: #fff;
+  border-color: var(--amber);
+  border-width: 3px;
+  color: var(--amber-ink);
+}
+.table-btn.state-mastered {
+  background: var(--gold);
+  border-color: var(--gold-deep);
+  color: #4a3106;
+  box-shadow: 0 3px 10px rgba(234, 179, 8, 0.35);
+}
+
+.table-btn.selected {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+.table-btn.selected::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 21px;
+  border: 3px solid var(--accent);
+  pointer-events: none;
+}
+/* A mastered or practising table keeps its own colour when picked; the
+   ring alone says "this is the one". */
+.table-btn.selected.state-mastered {
+  background: var(--gold);
+  color: #4a3106;
+  border-color: var(--gold-deep);
+}
+.table-btn.selected.state-practising {
+  background: #fff;
+  color: var(--amber-ink);
+  border-color: var(--amber);
+}
+
+.table-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.table-btn.challenge.selected:not(.state-mastered):not(.state-practising) {
+  background: #0f766e; color: #fff; border-color: transparent;
+}
+.table-btn.challenge.selected::after { border-color: #0f766e; }
+
+.menu-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.menu-mastered {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--gold-deep);
+}
 
 .toggle-row {
   display: flex;
@@ -724,7 +827,35 @@ body.playing-challenge .pile-incorrect .pile-label svg { stroke: var(--wrong); }
   background: #fff;
   font-family: var(--body);
 }
-.dialog-large { max-width: 620px; max-height: 86vh; overflow: auto; }
+/* Column layout so a tall dialog scrolls its middle and keeps the title
+   and the Done button on screen — the wall with a graph open used to
+   push Done off the bottom of an iPad. */
+.dialog-large {
+  max-width: 620px;
+  max-height: 88dvh;
+  overflow: hidden;
+}
+/* Guarded by [open]: a bare `display: flex` here beats the browser's own
+   `dialog:not([open]) { display: none }`, which leaves the closed dialog
+   sitting invisibly over the menu swallowing every tap. */
+.dialog-large[open] {
+  display: flex;
+  flex-direction: column;
+}
+.dialog-large > .dialog-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -0.5rem;
+  padding: 0 0.5rem;
+}
+.dialog-large > .dialog-actions {
+  flex-shrink: 0;
+  border-top: 1px solid #f0eefb;
+  padding-top: 0.9rem;
+}
 .dialog::backdrop { background: rgba(29, 32, 51, 0.45); }
 .dialog h2 { margin-top: 0; font-family: var(--display); font-weight: 600; color: #5535c4; }
 .dialog h3 { font-family: var(--display); font-weight: 600; }
@@ -757,11 +888,17 @@ body.playing-challenge .pile-incorrect .pile-label svg { stroke: var(--wrong); }
   cursor: pointer;
 }
 .tab.active { background: #6d4ae0; color: #fff; }
-.manage-list { list-style: none; padding: 0; margin: 0 0 1rem; max-height: 220px; overflow: auto; }
+/* No inner scroll any more — the dialog body scrolls as one, so a class
+   of 28 reads as one list instead of a box inside a box. */
+.manage-list { list-style: none; padding: 0; margin: 0 0 1rem; }
 .manage-list li {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.6rem 0; border-bottom: 1px solid rgba(29, 32, 51, 0.07);
 }
+.manage-who { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.manage-who b { font-weight: 600; }
+.manage-progress { font-size: 0.8rem; color: #6b7488; font-weight: 500; }
 .bulk-label { font-weight: 600; font-size: 0.9rem; display: block; margin-top: 0.5rem; }
 
 /* ---------- Mastery wall ---------- */
@@ -799,25 +936,48 @@ body.playing-challenge .pile-incorrect .pile-label svg { stroke: var(--wrong); }
 .wall-num { font-family: var(--display); font-size: 1.05rem; font-weight: 600; line-height: 1; }
 .wall-mark { font-size: 0.85rem; line-height: 1; }
 
-.wall-none { background: #f1f1f4; border-color: #e2e2e8; color: #9ca3af; }
-.wall-practising { background: #ffe9bd; border-color: #fcd88a; color: #92620a; }
+/* Three states told apart by treatment, not by two shades of the same
+   yellow: flat grey, an amber RING on white, then solid gold. Fill vs
+   no-fill reads from across the room; two ambers never did.          */
+.wall-none {
+  background: var(--accent-tint);
+  border-color: var(--accent-line);
+  color: var(--accent-deep);
+  opacity: 0.75;
+}
+.wall-practising {
+  background: #fff;
+  border-color: var(--amber);
+  border-width: 3px;
+  color: var(--amber-ink);
+}
 .wall-mastered {
   background: var(--gold);
   border-color: var(--gold-deep);
   color: #4a3106;
   box-shadow: 0 3px 10px rgba(234, 179, 8, 0.4);
 }
-.wall-tile.challenge.wall-none { background: #eef6f5; border-color: #dbecea; }
+.wall-tile.challenge.wall-none { background: #eaf3f2; border-color: #eaf3f2; }
+
+/* Clean runs so far, as filled and hollow pips — "1 of 2" without words. */
+.wall-pips { display: flex; gap: 3px; line-height: 1; }
+.wall-pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+.wall-pip.filled { background: currentColor; }
 
 .wall-key {
   display: flex; flex-wrap: wrap; gap: 0.9rem; justify-content: center;
   font-size: 0.75rem; font-weight: 600; color: #6b7488; margin: 0.75rem 0 0.25rem;
 }
 .wall-key span { display: inline-flex; align-items: center; gap: 0.3rem; }
-.key-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
-.key-mastered { background: var(--gold); }
-.key-practising { background: #ffe9bd; border: 1px solid #fcd88a; }
-.key-none { background: #f1f1f4; border: 1px solid #e2e2e8; }
+.key-swatch { width: 14px; height: 14px; border-radius: 5px; display: inline-block; }
+.key-mastered { background: var(--gold); border: 1px solid var(--gold-deep); }
+.key-practising { background: #fff; border: 3px solid var(--amber); }
+.key-none { background: var(--accent-tint); border: 1px solid var(--accent-line); }
 
 .wall-detail { margin-top: 1rem; padding: 1rem; border-radius: 16px; background: #f6f4fd; }
 .wall-detail h3 { margin: 0 0 0.25rem; color: #5535c4; }
@@ -826,7 +986,9 @@ body.playing-challenge .pile-incorrect .pile-label svg { stroke: var(--wrong); }
 .wall-graph-empty, .wall-graph-caption {
   font-size: 0.85rem; font-weight: 600; color: #6b7488; text-align: center; margin: 0.4rem 0 0;
 }
-.trend-svg { width: 100%; height: auto; display: block; }
+/* Capped: the viewBox is 2.5:1, so across the full width of the dialog
+   the chart grew to 230px of mostly empty space. */
+.trend-svg { width: 100%; max-width: 400px; height: auto; display: block; margin: 0 auto; }
 .trend-line { fill: none; stroke: #6d4ae0; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: #6d4ae0; }
 .trend-dot-last { fill: #ff6b35; }
