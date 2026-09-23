@@ -8,7 +8,7 @@
 
   <!-- Add to Home Screen / PWA -->
   <link rel="manifest" href="manifest.json" />
-  <meta name="theme-color" content="#7C3AED" />
+  <meta name="theme-color" content="#6D4AE0" />
 
   <!-- iOS / iPadOS home screen -->
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
@@ -16,11 +16,19 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Flash Flips" />
 
-  <!-- Favicon (browser tab) -->
-  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <!-- Favicon (browser tab). The reduced mark — the full one closes up at 16px. -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png" />
+
+  <!-- Fredoka for numerals, Outfit for UI. If the network is gone the stack
+       falls back to SF Pro Rounded on iPad, which is a close match. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <!-- Asset version: bump ?v= on every styles.css / app.js change to bust caches. -->
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=8" />
 </head>
 <body>
   <div id="app" class="app">
@@ -29,7 +37,19 @@
     <!-- HOME: Who's playing -->
     <section id="screen-home" class="screen active" aria-label="Home">
       <header class="hero">
-        <h1 class="title">⚡ Flash Flips ⚡</h1>
+        <h1 class="title">
+          <svg class="ff-mark" viewBox="0 0 100 100" role="img" aria-label="Flash Flips">
+            <mask id="ffMarkHome">
+              <rect x="50" y="6" width="44" height="88" rx="12" fill="#fff"/>
+              <rect x="66" y="34" width="11" height="32" rx="5.5" fill="#000" transform="rotate(45 72 50)"/>
+              <rect x="66" y="34" width="11" height="32" rx="5.5" fill="#000" transform="rotate(-45 72 50)"/>
+            </mask>
+            <rect x="6" y="26" width="12" height="48" rx="5" fill="currentColor" opacity="0.32"/>
+            <rect x="24" y="16" width="20" height="68" rx="7" fill="currentColor" opacity="0.62"/>
+            <rect width="100" height="100" fill="currentColor" mask="url(#ffMarkHome)"/>
+          </svg>
+          <span>Flash Flips</span>
+        </h1>
         <p class="subtitle">Times tables practice</p>
       </header>
       <p class="players-label">Tap your name to start</p>
@@ -82,56 +102,82 @@
       <header class="bar game-bar">
         <button type="button" id="btn-menu" class="btn btn-pill">← Menu</button>
         <div class="bar-center">
+          <span id="challenge-chip" class="challenge-chip hidden">Challenge</span>
           <span id="game-table-label" class="game-table-label"></span>
         </div>
-        <div class="score-pills">
-          <span class="pill pill-correct">✓ <span id="score-correct">0</span></span>
-          <span class="pill pill-wrong">✕ <span id="score-wrong">0</span></span>
-        </div>
+        <span id="streak-pill" class="streak-pill">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2c.6 3.5-1.6 5-3 6.5C7.3 10.3 6 12 6 14.5A6 6 0 0018 15c0-3.5-2.2-5.4-3.6-7.2C13 6 12.4 4 12 2z"/></svg>
+          <b id="streak-count">0</b> <span class="streak-word">in a row</span>
+        </span>
       </header>
+
+      <!-- One pip per card in this round: filled as they are answered. -->
+      <div id="rail" class="rail" aria-hidden="true"></div>
       <p id="cards-left" class="cards-left"></p>
 
-      <div class="game-stage">
-        <div class="pile pile-correct" id="pile-correct" aria-label="Correct pile">
-          <div class="pile-stack" id="stack-correct"></div>
-          <span class="pile-label">✅ Correct (<span id="pile-correct-count">0</span>)</span>
-        </div>
-
-        <div class="deck-area">
-          <div class="deck-peeks" aria-hidden="true"></div>
-          <div id="flash-card" class="flash-card" data-state="question">
-            <div class="card-inner">
-              <div class="card-face card-front">
-                <span id="card-question" class="card-question"></span>
-                <span class="card-equals">=</span>
-              </div>
-              <div class="card-face card-back">
-                <span id="card-answer" class="card-answer"></span>
-              </div>
+      <div class="deck-area">
+        <div id="flash-card" class="flash-card" data-state="question">
+          <div class="card-inner">
+            <div class="card-face card-front">
+              <span id="card-question" class="card-question"></span>
+              <span class="card-equals">=</span>
+              <span id="card-typed" class="card-typed is-empty"></span>
             </div>
-          </div>
-          <div id="flying-card" class="flash-card flying hidden" aria-hidden="true">
-            <div class="card-inner flipped">
-              <div class="card-face card-back">
-                <span id="flying-answer" class="card-answer"></span>
-              </div>
+            <div class="card-face card-back">
+              <span id="card-answer" class="card-answer"></span>
             </div>
           </div>
         </div>
 
-        <div class="pile pile-incorrect" id="pile-incorrect" aria-label="Incorrect pile">
-          <div class="pile-stack" id="stack-incorrect"></div>
-          <span class="pile-label">❌ Try Again (<span id="pile-incorrect-count">0</span>)</span>
+        <!-- Two nested layers: the outer carries the sideways move, the inner
+             the drop and the tip. Their easings differ, which is what bends
+             the path into an arc. -->
+        <div id="flying-card" class="flying hidden" aria-hidden="true">
+          <div class="flying-y">
+            <div class="flying-face">
+              <span id="flying-answer"></span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <p id="typed-display" class="typed-display">?</p>
-      <div id="numpad" class="numpad"></div>
+      <div class="play-row">
+        <div class="pile pile-correct" id="pile-correct" aria-label="Correct pile">
+          <div class="pile-stack" id="stack-correct"></div>
+          <span class="pile-label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            <span id="pile-correct-count">0</span> correct
+          </span>
+        </div>
+
+        <div id="numpad" class="numpad"></div>
+
+        <div class="pile pile-incorrect" id="pile-incorrect" aria-label="Incorrect pile">
+          <div class="pile-stack" id="stack-incorrect"></div>
+          <span class="pile-label">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            <span id="pile-incorrect-count">0</span> to redo
+          </span>
+        </div>
+      </div>
     </section>
 
     <!-- SUMMARY -->
     <section id="screen-summary" class="screen" aria-label="Summary" hidden>
       <main class="summary-main panel">
+        <div class="summary-brand">
+          <svg class="ff-mark" viewBox="0 0 100 100" role="img" aria-label="Flash Flips">
+            <mask id="ffMark">
+              <rect x="50" y="6" width="44" height="88" rx="12" fill="#fff"/>
+              <rect x="66" y="34" width="11" height="32" rx="5.5" fill="#000" transform="rotate(45 72 50)"/>
+              <rect x="66" y="34" width="11" height="32" rx="5.5" fill="#000" transform="rotate(-45 72 50)"/>
+            </mask>
+            <rect x="6" y="26" width="12" height="48" rx="5" fill="currentColor" opacity="0.32"/>
+            <rect x="24" y="16" width="20" height="68" rx="7" fill="currentColor" opacity="0.62"/>
+            <rect width="100" height="100" fill="currentColor" mask="url(#ffMark)"/>
+          </svg>
+          <span class="summary-wordmark">Flash Flips</span>
+        </div>
         <h2 class="summary-title">Round complete!</h2>
         <p id="summary-stars" class="summary-stars"></p>
         <p id="summary-accuracy" class="summary-stat"></p>
@@ -263,6 +309,6 @@
     </dialog>
   </div>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

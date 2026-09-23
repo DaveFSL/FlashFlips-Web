@@ -41,6 +41,21 @@
     challengeMultiplier: 1.6, // 13–20 need working out, not recall — allow longer
   };
 
+  /**
+   * The card's flight from the deck into its pile.
+   *
+   * easeY's first control point is deliberately negative: that makes the
+   * vertical travel go backwards (upward) before it heads down, so the card
+   * lifts, tips over and settles like one dealt onto a table rather than
+   * sliding sideways. Tune spinDeg for how far it tips; make easeY's -0.52
+   * more negative for a higher lift.
+   */
+  const ARC = {
+    easeX: "cubic-bezier(0.55, 0, 0.72, 1)",
+    easeY: "cubic-bezier(0.34, -0.52, 0.4, 1)",
+    spinDeg: 14,
+  };
+
   const MESSAGES = {
     perfect: [
       "🌟 Perfect Score! You're a Maths Superstar!",
@@ -91,6 +106,8 @@
     attempts: [],
     lastInputMethod: "unknown",
     challenge: false,
+    streak: 0,
+    results: [],
   };
 
   // Challenge mode is a per-device setting: at school each child has their own
@@ -592,12 +609,18 @@
   }
 
   // --- Navigation ---
+  // Set when a challenge deck starts; the night palette carries through the
+  // round and its summary, then drops away on the way back to menu or home.
+  let challengePalette = false;
+
   function showScreen(name) {
     Object.entries(screens).forEach(([key, el]) => {
       if (!el) return;
       el.classList.toggle("active", key === name);
       el.hidden = key !== name;
     });
+    const dark = challengePalette && (name === "game" || name === "summary");
+    document.body.classList.toggle("playing-challenge", dark);
   }
 
   // --- Home ---
@@ -786,6 +809,8 @@
     game.totalIncorrect = 0;
     game.missedFacts = [];
     game.attempts = [];
+    game.streak = 0;
+    game.results = [];
     game.gameStart = Date.now();
     game.elapsed = 0;
 
@@ -795,10 +820,10 @@
     // The whole game screen picks up challenge colours when a challenge table
     // is in play, so a teacher can see from across the room who is on 17× and
     // ask why, if they are meant to be on their 4s.
-    const playingChallenge = game.mixTables
+    challengePalette = game.mixTables
       ? game.challenge
       : isChallengeTable(game.selectedTable);
-    document.body.classList.toggle("playing-challenge", playingChallenge);
+    $("#challenge-chip").classList.toggle("hidden", !challengePalette);
 
     showScreen("game");
     $("#game-table-label").textContent = game.mixTables
@@ -833,12 +858,12 @@
   function renderGame() {
     const card = game.cards[game.index];
     const left = Math.max(0, game.cards.length - game.index);
-    $("#cards-left").textContent = `${left} cards left`;
-    $("#score-correct").textContent = game.correct.length;
-    $("#score-wrong").textContent = game.incorrect.length;
+    $("#cards-left").textContent = `Card ${Math.min(game.index + 1, game.cards.length)} of ${game.cards.length}`;
     $("#pile-correct-count").textContent = game.correct.length;
     $("#pile-incorrect-count").textContent = game.incorrect.length;
 
+    renderStreak();
+    renderRail();
     renderPileStacks();
 
     const fc = $("#flash-card");
@@ -853,9 +878,11 @@
     $("#card-answer").textContent = card.answer;
     $("#flying-card").classList.add("hidden");
 
-    const display = $("#typed-display");
-    display.textContent = game.typed || "?";
-    display.classList.toggle("empty", !game.typed);
+    // The typed answer goes on the card itself, straight after the equals,
+    // so the feedback is where the eye already is.
+    const typed = $("#card-typed");
+    typed.textContent = game.typed;
+    typed.classList.toggle("is-empty", !game.typed);
 
     // Start the per-card timer only when a fresh card is on screen (not mid-flip,
     // and not on the re-renders that happen while a digit is being typed — those
@@ -865,17 +892,40 @@
     }
   }
 
+  function renderStreak() {
+    const pill = $("#streak-pill");
+    $("#streak-count").textContent = game.streak;
+    pill.classList.toggle("is-zero", game.streak === 0);
+  }
+
+  /** One pip per card in this round, filled behind the current card. */
+  function renderRail() {
+    const rail = $("#rail");
+    const total = game.cards.length;
+    if (rail.childElementCount !== total) {
+      rail.innerHTML = "";
+      for (let i = 0; i < total; i++) rail.appendChild(document.createElement("i"));
+    }
+    Array.from(rail.children).forEach((pip, i) => {
+      const result = game.results[i];
+      pip.className =
+        result === true ? "is-correct"
+        : result === false ? "is-wrong"
+        : i === game.index ? "is-current"
+        : "";
+    });
+  }
+
   function renderPileStacks() {
     ["correct", "incorrect"].forEach((side) => {
       const list = side === "correct" ? game.correct : game.incorrect;
       const stack = $(`#stack-${side}`);
-      const color = side === "correct" ? "var(--green)" : "var(--red)";
       stack.innerHTML = "";
-      const visible = list.slice(-5);
-      visible.forEach((c, i) => {
+      stack.classList.toggle("has-cards", list.length > 0);
+      // Only the top few are drawn; the rest would never be seen anyway.
+      list.slice(-5).forEach((c, i) => {
         const el = document.createElement("div");
         el.className = "mini-card";
-        el.style.background = color;
         el.style.transform = `translateY(${-i * 4}px)`;
         el.style.zIndex = i;
         el.textContent = c.answer;
@@ -920,35 +970,48 @@
       fc.dataset.state = "answer";
     });
 
-    const slideDelay = 900;
-    const slideDuration = 750;
+    const slideDelay = 860;
+    const slideDuration = 780;
 
     setTimeout(() => {
       const flying = $("#flying-card");
-      const deckArea = document.querySelector(".deck-area");
+      const flyingY = flying.querySelector(".flying-y");
       const pileEl = correct ? $("#pile-correct") : $("#pile-incorrect");
-      const deckRect = deckArea.getBoundingClientRect();
-      const pileRect = pileEl.getBoundingClientRect();
+      const stackEl = correct ? $("#stack-correct") : $("#stack-incorrect");
+      const cardRect = fc.getBoundingClientRect();
+      const pileRect = stackEl.getBoundingClientRect();
 
       fc.style.visibility = "hidden";
       flying.classList.remove("hidden");
       flying.classList.toggle("incorrect", !correct);
       $("#flying-answer").textContent = card.answer;
 
-      const startX = deckRect.left + deckRect.width / 2;
-      const startY = deckRect.top + deckRect.height / 2;
-      const endX = pileRect.left + pileRect.width / 2;
-      const endY = pileRect.top + pileRect.height / 2;
-      const dx = endX - startX;
-      const dy = endY - startY;
+      const dx = (pileRect.left + pileRect.width / 2) - (cardRect.left + cardRect.width / 2);
+      const dy = (pileRect.top + pileRect.height / 2) - (cardRect.top + cardRect.height / 2);
+      const scale = cardRect.width ? pileRect.width / cardRect.width : 0.43;
+      const spin = correct ? -ARC.spinDeg : ARC.spinDeg;
 
-      flying.style.transform = "translate(0, 0)";
+      // Reset both layers with no transition, force a reflow so the browser
+      // takes the reset as the starting point, then animate.
+      flying.style.transition = "none";
+      flyingY.style.transition = "none";
+      flying.style.transform = "translateX(0px)";
+      flyingY.style.transform = "translateY(0px) rotate(0deg) scale(1)";
+      void flying.offsetWidth;
+
       requestAnimationFrame(() => {
-        flying.style.transition = `transform ${slideDuration}ms cubic-bezier(0.25, 0.8, 0.25, 1)`;
-        flying.style.transform = `translate(${dx}px, ${dy}px)`;
+        // The outer layer runs the horizontal move on an ordinary ease. The
+        // inner one runs the drop on a curve whose first control point is
+        // NEGATIVE, which sends the card up before it comes down. The two
+        // disagreeing is the whole trick — that is the arc.
+        flying.style.transition = `transform ${slideDuration}ms ${ARC.easeX}`;
+        flyingY.style.transition = `transform ${slideDuration}ms ${ARC.easeY}`;
+        flying.style.transform = `translateX(${dx}px)`;
+        flyingY.style.transform =
+          `translateY(${dy}px) rotate(${spin}deg) scale(${scale})`;
       });
 
-      setTimeout(finishResolve, slideDuration + 80, correct, card, elapsedMs);
+      setTimeout(finishResolve, slideDuration + 70, correct, card, elapsedMs);
     }, slideDelay);
   }
 
@@ -978,6 +1041,9 @@
       input: game.lastInputMethod,
     });
 
+    game.results[game.index] = correct;
+    game.streak = correct ? game.streak + 1 : 0;
+
     if (correct) {
       game.correct.push(card);
     } else {
@@ -1001,9 +1067,12 @@
     void inner.offsetWidth; // force reflow so the instant reset takes effect
     inner.style.transition = "";
     fc.style.visibility = "";
-    $("#flying-card").classList.add("hidden");
-    $("#flying-card").style.transform = "";
-    $("#flying-card").style.transition = "";
+    const flyingEl = $("#flying-card");
+    const flyingYEl = flyingEl.querySelector(".flying-y");
+    flyingEl.classList.add("hidden");
+    flyingEl.style.transform = "";
+    flyingEl.style.transition = "";
+    if (flyingYEl) { flyingYEl.style.transform = ""; flyingYEl.style.transition = ""; }
 
     if (game.index >= game.cards.length) {
       if (game.incorrect.length === 0) {
@@ -1013,6 +1082,7 @@
       game.cards = shuffle(game.incorrect);
       game.incorrect = [];
       game.index = 0;
+      game.results = [];
       game.roundNumber++;
     }
 

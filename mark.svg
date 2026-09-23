@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Flash Flips">
+  <title>Flash Flips</title>
+  <mask id="ffCard">
+    <rect x="50" y="6" width="44" height="88" rx="12" fill="#fff"/>
+    <rect x="66" y="34" width="11" height="32" rx="5.5" fill="#000" transform="rotate(45 72 50)"/>
+    <rect x="66" y="34" width="11" height="32" rx="5.5" fill="#000" transform="rotate(-45 72 50)"/>
+  </mask>
+  <rect x="6"  y="26" width="12" height="48" rx="5" fill="currentColor" opacity="0.32"/>
+  <rect x="24" y="16" width="20" height="68" rx="7" fill="currentColor" opacity="0.62"/>
+  <rect width="100" height="100" fill="currentColor" mask="url(#ffCard)"/>
+</svg>
