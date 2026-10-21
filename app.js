@@ -34,11 +34,24 @@
    * session, so changing these values re-scores every session already recorded.
    */
   const MASTERY = {
-    baseMs: 1500,
-    perDigitMs: 500,
+    // Calibrated October 2026 against 324 cards from five children in Dave's
+    // class. The old 1500/500 let only 59% of CORRECT answers count as quick,
+    // which gave a child who plainly knew her 12s a 5% chance of ever seeing
+    // gold. These numbers put her at 97% while leaving a child still working
+    // the table out in amber, where he belongs. Revisit on a term of data.
+    baseMs: 2600,
+    perDigitMs: 650,
     passesNeeded: 2,
     windowSize: 3,
+    // Suspect: the one child who played both was FASTER on 14× than on 12×,
+    // so this may be too generous. Left alone pending more than one child.
     challengeMultiplier: 1.6, // 13–20 need working out, not recall — allow longer
+    // Past this a child has stopped attempting the card — talking, or the iPad
+    // put down mid-deck. Real examples ran to 49 seconds. Such a card still
+    // counts as slow for mastery (no free pass for walking away) but is kept
+    // out of the averages and the trend line, where a single one of them adds
+    // seconds to a twelve-card mean.
+    abandonedMs: 15000,
     // How many cards in a round may miss their time threshold and still have
     // the round count. Requiring all twelve made mastery a coin flip: at a
     // 1.5s median only a quarter of error-free rounds qualified, so a child
@@ -146,6 +159,17 @@
 
   function pick(arr) {
     return arr[Math.floor(Math.random() * arr.length)];
+  }
+
+  // A card the child walked away from, rather than one they found hard.
+  function isAbandoned(ms) {
+    return ms > MASTERY.abandonedMs;
+  }
+
+  // Median of card times with the abandoned ones dropped. Used everywhere a
+  // time is shown to a child; the mastery test deliberately still sees them.
+  function attemptedMedian(attempts) {
+    return median(attempts.filter((a) => !isAbandoned(a.ms)).map((a) => a.ms));
   }
 
   function median(nums) {
@@ -544,6 +568,8 @@
     if (!Array.isArray(session.attempts) || session.attempts.length === 0) return false;
     if (session.roundsNeeded !== 1) return false;
 
+    // Abandoned cards are left in deliberately: they sit far above any
+    // threshold, so walking away costs the round a slow card as it should.
     let slow = 0;
     for (const a of session.attempts) {
       if (!a.correct) return false; // a wrong answer fails the round outright
@@ -585,9 +611,10 @@
       .filter((s) => s.tableKey === key)
       .sort((a, b) => new Date(a.date) - new Date(b.date))
       .map((s) => {
-        if (s.firstPassMedianMs != null) return s.firstPassMedianMs;
-        if (!Array.isArray(s.attempts)) return null;
-        return median(s.attempts.filter((a) => a.round === 1).map((a) => a.ms));
+        // Sessions recorded before the abandoned-card cutoff existed keep
+        // their stored median; recomputing from attempts cleans up the rest.
+        if (!Array.isArray(s.attempts)) return s.firstPassMedianMs ?? null;
+        return attemptedMedian(s.attempts.filter((a) => a.round === 1));
       })
       .filter((v) => v != null);
   }
@@ -1174,7 +1201,7 @@
     $("#summary-accuracy").textContent = `Accuracy: ${Math.round(accuracy)}%`;
     $("#summary-rounds").textContent = `Rounds needed: ${game.roundNumber}`;
 
-    const medMs = median(game.attempts.map((a) => a.ms));
+    const medMs = attemptedMedian(game.attempts);
     const timeEl = $("#summary-time");
     if (medMs != null) {
       timeEl.classList.remove("hidden");
@@ -1220,7 +1247,7 @@
         : "Mixed Tables"
       : `${game.selectedTable}× Tables`;
     const firstPassMs = game.attempts
-      .filter((a) => a.round === 1)
+      .filter((a) => a.round === 1 && !isAbandoned(a.ms))
       .map((a) => a.ms);
     const session = {
       id: uid(),
@@ -1650,7 +1677,10 @@
         );
       });
     });
-    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    // Excel on Windows reads a CSV as the system codepage unless it finds a
+    // byte-order mark, which turned every "×" into "Ã—". The BOM is invisible
+    // everywhere else and makes Excel read it as UTF-8.
+    const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = exportFilename("sessions");
@@ -1678,6 +1708,13 @@
     return `FlashFlips-${base}-${who || "player"}-${stamp}.csv`;
   }
 
+  // "7 × 8" -> 56. Returns "" when the question can't be parsed, so the
+  // export falls back to blank rather than a wrong number.
+  function answerFromQuestion(q) {
+    const m = String(q == null ? "" : q).match(/(\d+)\s*[×x*]\s*(\d+)/);
+    return m ? Number(m[1]) * Number(m[2]) : "";
+  }
+
   function exportAttemptsCSV() {
     const rows = [
       "Player,Date,Table,Challenge,Question,Answer,Digits,Time (ms),Threshold (ms),Under Threshold,Correct,Round,Input",
@@ -1688,7 +1725,11 @@
         if (!Array.isArray(sess.attempts)) return;
         const d = new Date(sess.date).toLocaleString();
         sess.attempts.forEach((att) => {
-          const answer = att.answer != null ? att.answer : "";
+          // Sessions recorded before the answer was stored still hold the
+          // question ("7 × 8"), so work it back out rather than exporting a
+          // blank — otherwise every column that depends on it (digits,
+          // threshold, under threshold) is empty for older rounds.
+          const answer = att.answer != null ? att.answer : answerFromQuestion(att.q);
           const digits = answer === "" ? "" : String(answer).length;
           const thr =
             answer === "" ? "" : Math.round(thresholdFor(answer, !!att.challenge));
@@ -1712,7 +1753,10 @@
         });
       });
     });
-    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" });
+    // Excel on Windows reads a CSV as the system codepage unless it finds a
+    // byte-order mark, which turned every "×" into "Ã—". The BOM is invisible
+    // everywhere else and makes Excel read it as UTF-8.
+    const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = exportFilename("card-times");
