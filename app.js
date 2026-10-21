@@ -52,6 +52,18 @@
     // out of the averages and the trend line, where a single one of them adds
     // seconds to a twelve-card mean.
     abandonedMs: 15000,
+  };
+
+  const RETENTION = {
+    // Expanding gaps: a fortnight after it goes gold, then two months, then
+    // six. Dave's classroom shape, and the standard spacing pattern.
+    intervalsDays: [14, 60, 180],
+    // Rounds on a table before its per-card breakdown is worth showing.
+    factsAfterRounds: 3,
+    // Below this share of cards quick, a table is genuinely behind rather than
+    // just a tie-break away from the others. Roughly the per-card rate that
+    // corresponds to reliably earning the star.
+    behindBelow: 0.85,
     // How many cards in a round may miss their time threshold and still have
     // the round count. Requiring all twelve made mastery a coin flip: at a
     // 1.5s median only a quarter of error-free rounds qualified, so a child
@@ -595,16 +607,137 @@
 
     const window = sessions.slice(-MASTERY.windowSize);
     const cleanPasses = window.filter(isCleanPass).length;
+    const state = cleanPasses >= MASTERY.passesNeeded ? "mastered" : "practising";
 
     return {
-      state: cleanPasses >= MASTERY.passesNeeded ? "mastered" : "practising",
+      state,
       sessions: sessions.length,
       cleanPasses,
       history: sessions,
+      lastPlayed: new Date(sessions[sessions.length - 1].date),
+      dueDays: state === "mastered" ? dueDaysFor(sessions) : null,
     };
   }
 
+  /**
+   * Spaced retrieval. A table that has been gold for a fortnight is worth
+   * re-testing; one that has survived that check can wait two months, then
+   * six. The star is NEVER removed by the clock — only by a round that shows
+   * it has actually slipped. This just decides when to ask.
+   *
+   * Returns how many days overdue the table is (0 or less = not due yet).
+   */
+  function dueDaysFor(sessions) {
+    // Replay the history to find when it first went gold; rounds played after
+    // that point are the checks it has already passed.
+    let firstGold = -1;
+    for (let i = 0; i < sessions.length; i++) {
+      const w = sessions.slice(Math.max(0, i + 1 - MASTERY.windowSize), i + 1);
+      if (w.filter(isCleanPass).length >= MASTERY.passesNeeded) {
+        firstGold = i;
+        break;
+      }
+    }
+    if (firstGold === -1) return null;
+
+    // A "check" is a round played after a real gap, not just the next round in
+    // the same week. Counting every subsequent round pushed a child who played
+    // three times in one week straight onto the two-month interval, so the
+    // badge never appeared at all.
+    let checksPassed = 0;
+    for (let i = Math.max(1, firstGold + 1); i < sessions.length; i++) {
+      const gap =
+        (new Date(sessions[i].date) - new Date(sessions[i - 1].date)) / 86400000;
+      if (gap >= RETENTION.intervalsDays[0]) checksPassed++;
+    }
+
+    const wait = RETENTION.intervalsDays[
+      Math.min(checksPassed, RETENTION.intervalsDays.length - 1)
+    ];
+    const last = new Date(sessions[sessions.length - 1].date);
+    const days = (Date.now() - last.getTime()) / 86400000;
+    return days - wait;
+  }
+
+  /**
+   * Of all the mastered tables going stale, surface only the one that has
+   * waited longest. A child with eight gold tables coming back from two weeks
+   * of holidays would otherwise meet a grid full of nagging badges on the
+   * first morning of term, which turns a nudge into a chore list.
+   */
+  function tableDueForCheck(student) {
+    if (!student) return null;
+    let worst = null;
+    range(1, CHALLENGE_MAX).forEach((n) => {
+      const m = masteryFor(student, n);
+      if (m.state !== "mastered" || m.dueDays == null || m.dueDays <= 0) return;
+      if (!worst || m.dueDays > worst.dueDays) worst = { table: n, dueDays: m.dueDays };
+    });
+    return worst;
+  }
+
   /** Median first-pass time per session, for the per-table trend graph. */
+  /**
+   * The typical time for each individual card in a table, across every round
+   * played on it. A table average is the average of "instant" and "counting on
+   * fingers" and describes neither; this is what a child can actually act on.
+   *
+   * Held back until RETENTION.factsAfterRounds rounds exist, because each fact
+   * comes up once per deck — after one round every "slowest fact" is a single
+   * measurement, and a child who hesitated once would be told that is their
+   * sticking point.
+   */
+  function factTimesFor(student, table) {
+    const key = String(table);
+    const sessions = (student.sessions || []).filter((s) => s.tableKey === key);
+    if (sessions.length < RETENTION.factsAfterRounds) return null;
+
+    const byFact = new Map();
+    sessions.forEach((s) => {
+      if (!Array.isArray(s.attempts)) return;
+      s.attempts.forEach((a) => {
+        if (a.round !== 1 || !a.correct || isAbandoned(a.ms)) return;
+        const q = String(a.q);
+        if (!byFact.has(q)) byFact.set(q, []);
+        byFact.get(q).push(a.ms);
+      });
+    });
+
+    const facts = [...byFact.entries()]
+      .filter(([, times]) => times.length >= 2)
+      .map(([q, times]) => ({ q, ms: median(times), n: times.length }))
+      .sort((a, b) => a.ms - b.ms);
+
+    if (facts.length < 6) return null;
+    return { quickest: facts.slice(0, 3), slowest: facts.slice(-3).reverse() };
+  }
+
+  /**
+   * Share of cards on a table that were both CORRECT and inside their own time
+   * allowance. Measuring each card against its own threshold is what makes the
+   * tables comparable: rank on raw time instead and every child is told their
+   * 11s and 12s are weakest, because those answers are longer to type.
+   */
+  function quickShareFor(student, table) {
+    const key = String(table);
+    const sessions = (student.sessions || []).filter((s) => s.tableKey === key);
+    let total = 0;
+    let quick = 0;
+    sessions.forEach((s) => {
+      if (!Array.isArray(s.attempts)) return;
+      s.attempts.forEach((a) => {
+        if (a.round !== 1) return;
+        total++;
+        const answer = a.answer != null ? a.answer : answerFromQuestion(a.q);
+        if (answer === "") return;
+        if (a.correct && a.ms <= thresholdFor(answer, !!a.challenge)) quick++;
+      });
+    });
+    // One round is twelve cards and no evidence at all; such a table is drawn
+    // as an outline and left out of the ranking rather than shown as "worst".
+    return { total, quick, enough: sessions.length >= 2, pct: total ? quick / total : 0 };
+  }
+
   function trendFor(student, table) {
     const key = String(table);
     return (student.sessions || [])
@@ -747,7 +880,7 @@
       : "Mix all tables together 🎲";
   }
 
-  function makeTableButton(n, locked) {
+  function makeTableButton(n, locked, dueTable) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "table-btn";
@@ -779,6 +912,11 @@
       );
     }
 
+    if (student && dueTable === n) {
+      btn.classList.add("due-check");
+      btn.appendChild(makeDueBadge());
+    }
+
     if (!game.mixTables && game.selectedTable === n) btn.classList.add("selected");
     btn.disabled = locked;
     btn.addEventListener("click", () => {
@@ -798,15 +936,19 @@
     grid.innerHTML = "";
     challengeGrid.innerHTML = "";
     const locked = game.menuLocked && !game.mixTables;
+    const due = tableDueForCheck(currentStudent());
+    const dueTable = due ? due.table : null;
 
-    range(1, CORE_MAX).forEach((n) => grid.appendChild(makeTableButton(n, locked)));
+    range(1, CORE_MAX).forEach((n) =>
+      grid.appendChild(makeTableButton(n, locked, dueTable))
+    );
 
     // 13–20 only exist once Challenge mode is on, so a younger child never sees
     // 18× as an option.
     challengeWrap.classList.toggle("hidden", !game.challenge);
     if (game.challenge) {
       range(CORE_MAX + 1, CHALLENGE_MAX).forEach((n) =>
-        challengeGrid.appendChild(makeTableButton(n, locked))
+        challengeGrid.appendChild(makeTableButton(n, locked, dueTable))
       );
     }
 
@@ -825,10 +967,21 @@
     const student = currentStudent();
     const count = $("#menu-mastered");
     const key = $("#menu-key");
+    const nudge = $("#menu-due");
     if (!student) {
       count.classList.add("hidden");
       key.classList.add("hidden");
+      nudge.classList.add("hidden");
       return;
+    }
+
+    // One table, never a list. See tableDueForCheck.
+    if (dueTable) {
+      $("#menu-due-text").textContent =
+        `You haven't played your ${dueTable}s for a while — see if they're still quick`;
+      nudge.classList.remove("hidden");
+    } else {
+      nudge.classList.add("hidden");
     }
     const mastered = range(1, CORE_MAX).filter(
       (n) => masteryFor(student, n).state === "mastered"
@@ -1290,11 +1443,14 @@
     coreGrid.innerHTML = "";
     challengeGrid.innerHTML = "";
 
+    const due = tableDueForCheck(student);
+    const dueTable = due ? due.table : null;
+
     let mastered = 0;
     range(1, CORE_MAX).forEach((n) => {
       const m = masteryFor(student, n);
       if (m.state === "mastered") mastered++;
-      coreGrid.appendChild(makeWallTile(student, n, m));
+      coreGrid.appendChild(makeWallTile(student, n, m, dueTable));
     });
 
     // Challenge squares only appear once the mode is on, matching the menu.
@@ -1302,14 +1458,31 @@
     if (game.challenge) {
       range(CORE_MAX + 1, CHALLENGE_MAX).forEach((n) => {
         const m = masteryFor(student, n);
-        challengeGrid.appendChild(makeWallTile(student, n, m));
+        challengeGrid.appendChild(makeWallTile(student, n, m, dueTable));
       });
     }
+
+    renderWallBars(student);
 
     $("#wall-summary").textContent =
       mastered === CORE_MAX
         ? "🏆 Every table mastered. Outstanding."
         : `${mastered} of ${CORE_MAX} tables mastered`;
+  }
+
+  // The circular arrow that marks a gold table as worth re-testing. Deliberately
+  // a badge beside the star rather than a change to the tile itself: the child
+  // has not lost anything, they are only being asked to show it again.
+  function makeDueBadge() {
+    const span = document.createElement("span");
+    span.className = "due-badge";
+    span.setAttribute("aria-hidden", "true");
+    span.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M21 12a9 9 0 1 1-2.6-6.4"></path>' +
+      '<polyline points="21 3 21 9 15 9"></polyline></svg>';
+    return span;
   }
 
   // A star once mastered; until then a filled pip per clean run and a
@@ -1335,7 +1508,88 @@
     return pips;
   }
 
-  function makeWallTile(student, table, m) {
+  const BAR_H = 150;
+
+  function renderWallBars(student) {
+    const group = $("#wall-bars-group");
+    const wrap = $("#wall-bars");
+    const tables = range(1, CORE_MAX).map((n) => ({
+      n,
+      state: masteryFor(student, n).state,
+      ...quickShareFor(student, n),
+    }));
+    const ranked = tables.filter((t) => t.enough);
+
+    // Nothing to compare until a few tables have real history behind them.
+    if (ranked.length < 3) {
+      group.classList.add("hidden");
+      return;
+    }
+    group.classList.remove("hidden");
+
+    // Only call out a table that is genuinely behind. Taking the bottom two
+    // regardless meant that when every table sat at 100% the tie-break picked
+    // two at random and told a child they were slow at them.
+    const slowest = ranked
+      .filter((t) => t.pct < RETENTION.behindBelow)
+      .sort((a, b) => a.pct - b.pct)
+      .slice(0, 2);
+    const slowSet = new Set(slowest.map((t) => t.n));
+
+    wrap.innerHTML = "";
+    wrap.setAttribute("role", "img");
+    wrap.setAttribute(
+      "aria-label",
+      "Percentage of cards answered correctly and quickly on each table: " +
+        tables
+          .map((t) =>
+            t.enough ? `${t.n} times ${Math.round(t.pct * 100)} percent`
+                     : `${t.n} times not enough data`
+          )
+          .join(", ")
+    );
+
+    tables.forEach((t) => {
+      const col = document.createElement("div");
+      col.className = "bar-col";
+
+      const bar = document.createElement("div");
+      bar.className = t.enough ? `bar bar-${t.state}` : "bar bar-thin";
+      bar.style.height = t.enough
+        ? `${Math.max(4, Math.round(t.pct * BAR_H))}px`
+        : "18px";
+
+      if (t.enough && slowSet.has(t.n)) {
+        const v = document.createElement("span");
+        v.className = "bar-value";
+        v.textContent = `${Math.round(t.pct * 100)}%`;
+        bar.appendChild(v);
+      }
+
+      const lab = document.createElement("span");
+      lab.className = "bar-label";
+      if (t.enough && slowSet.has(t.n)) lab.classList.add("is-slow");
+      if (!t.enough) lab.classList.add("is-thin");
+      lab.textContent = t.n;
+
+      col.append(bar, lab);
+      wrap.appendChild(col);
+    });
+
+    const thin = tables.filter((t) => !t.enough).length;
+    const lead = slowest.length
+      ? `Your ${slowest
+          .map((t) => `${t.n}s`)
+          .join(" and your ")} are taking you longest right now.`
+      : "Every table you've practised is coming out quick.";
+    $("#wall-bars-note").textContent =
+      lead +
+      (thin
+        ? ` ${thin} table${thin === 1 ? " is" : "s are"} outlined — not enough goes yet to say.`
+        : "");
+  }
+
+  function makeWallTile(student, table, m, dueTable) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `wall-tile wall-${m.state}`;
@@ -1347,10 +1601,16 @@
     btn.appendChild(num);
 
     btn.appendChild(makeStateMark(m));
+    if (dueTable === table) {
+      btn.classList.add("due-check");
+      btn.appendChild(makeDueBadge());
+    }
 
     const label =
       m.state === "mastered"
-        ? "mastered"
+        ? dueTable === table
+          ? "mastered, due for a check"
+          : "mastered"
         : m.state === "practising"
         ? `${m.cleanPasses} of ${MASTERY.passesNeeded} good runs`
         : "not started";
@@ -1391,6 +1651,32 @@
     $("#wall-detail-status").textContent = statusText;
 
     renderTrendGraph(trendFor(student, table));
+    renderFactLists(factTimesFor(student, table));
+  }
+
+  function renderFactLists(facts) {
+    const wrap = $("#wall-facts");
+    if (!facts) {
+      wrap.classList.add("hidden");
+      return;
+    }
+    const fill = (ul, rows) => {
+      ul.innerHTML = "";
+      rows.forEach((f) => {
+        const li = document.createElement("li");
+        const q = document.createElement("span");
+        q.className = "fact-q";
+        q.textContent = f.q;
+        const t = document.createElement("span");
+        t.className = "fact-t";
+        t.textContent = `${(f.ms / 1000).toFixed(1)}s`;
+        li.append(q, t);
+        ul.appendChild(li);
+      });
+    };
+    fill($("#wall-facts-quick"), facts.quickest);
+    fill($("#wall-facts-slow"), facts.slowest);
+    wrap.classList.remove("hidden");
   }
 
   /**

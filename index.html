@@ -82,6 +82,13 @@
           <span id="mix-label">Mix all tables together 🎲</span>
         </label>
         <p id="assigned-hint" class="assigned-hint hidden">Pick any times table to practise.</p>
+
+        <!-- Only ever one table at a time: see tableDueForCheck in app.js. -->
+        <div id="menu-due" class="menu-due hidden">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.6-6.4"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+          <span id="menu-due-text"></span>
+        </div>
+
         <div id="table-grid" class="table-grid"></div>
 
         <!-- Challenge tables (13–20) stay hidden until the toggle is on. -->
@@ -226,10 +233,31 @@
           <span><i class="key-swatch key-none"></i> Not started</span>
         </div>
 
+        <!-- Bars comparing the tables. Height is % of cards correct AND inside
+             their own allowance, so longer answers aren't penalised. -->
+        <div id="wall-bars-group" class="wall-bars-group hidden">
+          <h3 class="wall-bars-title">How quick are you on each table?</h3>
+          <p class="wall-bars-sub">Cards you got right <em>and</em> answered quickly.</p>
+          <div id="wall-bars" class="wall-bars"></div>
+          <p id="wall-bars-note" class="wall-bars-note"></p>
+        </div>
+
         <div id="wall-detail" class="wall-detail hidden">
           <h3 id="wall-detail-title"></h3>
           <p id="wall-detail-status" class="wall-detail-status"></p>
           <div id="wall-graph" class="wall-graph"></div>
+
+          <!-- Per-card breakdown, held back until three rounds exist. -->
+          <div id="wall-facts" class="wall-facts hidden">
+            <div class="fact-box fact-quick">
+              <h4>You just know these</h4>
+              <ul id="wall-facts-quick"></ul>
+            </div>
+            <div class="fact-box fact-slow">
+              <h4>You work these out</h4>
+              <ul id="wall-facts-slow"></ul>
+            </div>
+          </div>
         </div>
       </div>
 

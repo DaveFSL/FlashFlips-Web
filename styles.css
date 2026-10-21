@@ -402,6 +402,53 @@ body {
 }
 .table-btn.challenge.selected::after { border-color: #0f766e; }
 
+/* ---------- Due for a check ---------- */
+.menu-due {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 0.2rem;
+  border-radius: 13px;
+  background: #FFF8EC;
+  border: 2px solid #F3E4CB;
+  color: #8A4E05;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.menu-due svg {
+  width: 17px; height: 17px; flex-shrink: 0;
+  fill: none; stroke: var(--amber-ink); stroke-width: 2.2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+body.playing-challenge .menu-due {
+  background: var(--amber-bg); border-color: #4a3b22; color: var(--amber-fg);
+}
+
+/* A badge beside the star, not a change to the tile — the child has not lost
+   the table, they are only being asked to show it again. */
+.due-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--amber-ink);
+  color: var(--amber-ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.due-badge svg { width: 12px; height: 12px; display: block; }
+/* Above the selection ring, which is a pseudo-element and would otherwise
+   paint over the badge when the due table is also the chosen one. */
+.due-badge { z-index: 3; }
+.table-btn.selected::after { z-index: 1; }
+.wall-tile .due-badge { width: 19px; height: 19px; top: -6px; right: -6px; }
+.wall-tile .due-badge svg { width: 10px; height: 10px; }
+
 .menu-head {
   display: flex;
   align-items: baseline;
@@ -982,6 +1029,89 @@ body.playing-challenge .pile-incorrect .pile-label svg { stroke: var(--wrong); }
 .wall-detail h3 { margin: 0 0 0.25rem; color: #5535c4; }
 .wall-detail-status { font-size: 0.9rem; font-weight: 600; color: #6b7488; margin: 0 0 0.75rem; }
 .wall-graph { min-height: 40px; }
+
+/* ---------- Bars across the tables ---------- */
+.wall-bars-group { margin-top: 1.1rem; }
+.wall-bars-title {
+  margin: 0; font-family: var(--display); font-weight: 600;
+  font-size: 1rem; color: #5535c4;
+}
+.wall-bars-sub { margin: 0.15rem 0 0.7rem; font-size: 0.78rem; color: #4a5061; }
+.wall-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  border-bottom: 1px solid #cfcbde;
+  padding-bottom: 0;
+}
+.bar-col { flex-grow: 1; display: flex; flex-direction: column; align-items: center; }
+.bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  position: relative;
+  background: var(--accent-tint);
+}
+.bar-mastered { background: var(--gold); }
+.bar-practising { background: var(--amber); }
+.bar-none { background: var(--accent-line); }
+/* Too few goes to rank: an outline, never a short bar that reads as "worst". */
+.bar-thin {
+  background: none;
+  border: 2px dashed var(--accent-line);
+  box-sizing: border-box;
+}
+.bar-value {
+  position: absolute; top: -17px; left: 50%; transform: translateX(-50%);
+  font-family: var(--display); font-weight: 600; font-size: 0.72rem;
+  color: var(--amber-ink); white-space: nowrap;
+}
+.bar-label {
+  margin-top: 5px; font-size: 0.72rem; font-weight: 600; color: #4a5061;
+}
+.bar-label.is-slow { color: var(--amber-ink); }
+.bar-label.is-thin { color: #9aa0b0; }
+.wall-bars-note {
+  margin: 0.6rem 0 0; font-size: 0.78rem; line-height: 1.4; color: #2a2f3f;
+}
+body.playing-challenge .wall-bars-title { color: var(--accent); }
+body.playing-challenge .wall-bars-sub,
+body.playing-challenge .wall-bars-note { color: var(--muted); }
+
+/* ---------- Quickest / slowest cards in a table ---------- */
+.wall-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 0.9rem;
+}
+@media (max-width: 460px) { .wall-facts { grid-template-columns: 1fr; } }
+.fact-box { border-radius: 14px; padding: 0.8rem 0.9rem 0.85rem; }
+.fact-quick { background: #f1edfd; }
+.fact-slow { background: #fff8ec; }
+.fact-box h4 {
+  margin: 0 0 0.5rem;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+.fact-quick h4 { color: #5535c4; }
+.fact-slow h4 { color: var(--amber-ink); }
+.fact-box ul { list-style: none; margin: 0; padding: 0; }
+.fact-box li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(29, 32, 51, 0.08);
+}
+.fact-box li:last-child { border-bottom: none; }
+.fact-q { font-family: var(--display); font-weight: 600; font-size: 0.95rem; }
+.fact-t { font-size: 0.85rem; font-weight: 600; color: #4a5061; }
+.fact-slow .fact-t { color: var(--amber-ink); }
+body.playing-challenge .fact-quick { background: var(--raised-soft); }
+body.playing-challenge .fact-slow { background: var(--amber-bg); }
+body.playing-challenge .fact-quick h4 { color: var(--accent); }
+body.playing-challenge .fact-q { color: var(--ink); }
 .wall-graph-empty, .wall-graph-caption {
   font-size: 0.85rem; font-weight: 600; color: #6b7488; text-align: center; margin: 0.4rem 0 0;
 }
