@@ -52,6 +52,12 @@
     // out of the averages and the trend line, where a single one of them adds
     // seconds to a twelve-card mean.
     abandonedMs: 15000,
+    // How many cards in a round may miss their time threshold and still have
+    // the round count. Requiring all twelve made mastery a coin flip: at a
+    // 1.5s median only a quarter of error-free rounds qualified, so a child
+    // who answered everything correctly three times running was told they had
+    // none. Mistakes are still absolute — any wrong answer fails the round.
+    allowedSlow: 2,
   };
 
   const RETENTION = {
@@ -64,12 +70,6 @@
     // just a tie-break away from the others. Roughly the per-card rate that
     // corresponds to reliably earning the star.
     behindBelow: 0.85,
-    // How many cards in a round may miss their time threshold and still have
-    // the round count. Requiring all twelve made mastery a coin flip: at a
-    // 1.5s median only a quarter of error-free rounds qualified, so a child
-    // who answered everything correctly three times running was told they had
-    // none. Mistakes are still absolute — any wrong answer fails the round.
-    allowedSlow: 2,
   };
 
   /**
@@ -720,22 +720,33 @@
    */
   function quickShareFor(student, table) {
     const key = String(table);
-    const sessions = (student.sessions || []).filter((s) => s.tableKey === key);
+    const all = (student.sessions || []).filter((s) => s.tableKey === key);
+    // The chart's own line says "right now", so an all-time share was the
+    // wrong measure: a child's first fumbling round sat in the denominator
+    // for good and the bar could never climb back to where they now are.
+    const sessions = all.slice(-BAR_WINDOW);
     let total = 0;
     let quick = 0;
     sessions.forEach((s) => {
       if (!Array.isArray(s.attempts)) return;
       s.attempts.forEach((a) => {
         if (a.round !== 1) return;
-        total++;
+        // A card someone walked away from is already kept out of the speed
+        // averages. Counting it here as "not quick" punished them twice for
+        // one interruption, and it never aged out.
+        if (isAbandoned(a.ms)) return;
         const answer = a.answer != null ? a.answer : answerFromQuestion(a.q);
+        // Count only cards we can actually judge — an unparseable one used to
+        // land in the denominator and could never be quick.
         if (answer === "") return;
+        total++;
         if (a.correct && a.ms <= thresholdFor(answer, !!a.challenge)) quick++;
       });
     });
-    // One round is twelve cards and no evidence at all; such a table is drawn
-    // as an outline and left out of the ranking rather than shown as "worst".
-    return { total, quick, enough: sessions.length >= 2, pct: total ? quick / total : 0 };
+    // Two rounds is one good evening and one bad one, which is how a single
+    // off day in August got a table named as the slowest two months later.
+    // Three before a table may be ranked; fewer is drawn as an outline.
+    return { total, quick, enough: all.length >= 3, pct: total ? quick / total : 0 };
   }
 
   function trendFor(student, table) {
@@ -1509,6 +1520,10 @@
   }
 
   const BAR_H = 150;
+  // How many recent rounds on a table the bar reads. Deliberately longer than
+  // the mastery window of 3, so one ragged round moves the bar without
+  // defining it.
+  const BAR_WINDOW = 5;
 
   function renderWallBars(student) {
     const group = $("#wall-bars-group");
