@@ -1077,6 +1077,60 @@ body.playing-challenge .wall-bars-title { color: var(--accent); }
 body.playing-challenge .wall-bars-sub,
 body.playing-challenge .wall-bars-note { color: var(--muted); }
 
+/* ---------- A table on its own vs the same cards in a mixed deck ---------- */
+.wall-mix-group { margin-top: 1.3rem; }
+.mix-key {
+  display: flex; flex-wrap: wrap; gap: 0.1rem 1rem;
+  margin-bottom: 0.65rem; font-size: 0.72rem; font-weight: 600; color: #4a5061;
+}
+.mix-key span { display: inline-flex; align-items: center; gap: 0.3rem; }
+.mix-dot { width: 11px; height: 11px; border-radius: 3px; display: block; }
+.mix-dot-solo { background: #6d4ae0; }
+.mix-dot-mixed { background: #0ca09a; }
+.wall-mix { display: flex; flex-direction: column; gap: 0.6rem; }
+.mix-row { display: flex; align-items: center; gap: 0.6rem; }
+.mix-label {
+  width: 2.4rem; flex-shrink: 0; text-align: right;
+  font-family: var(--display); font-weight: 600; font-size: 0.95rem; color: #5535c4;
+}
+.mix-label.is-challenge { color: #0f5f59; }
+.mix-bars { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mix-line { display: grid; grid-template-columns: minmax(2.5rem, 1fr) auto; align-items: center; gap: 0.4rem; }
+.mix-track { min-width: 0; display: block; }
+/* The longest time fills its track and the rest are read against it. Length is
+   seconds — a longer bar means the card took longer. */
+.mix-bar { height: 11px; border-radius: 0 6px 6px 0; display: block; }
+.mix-bar-solo { background: #6d4ae0; }
+.mix-bar-mixed { background: #0ca09a; }
+.mix-value {
+  font-size: 0.7rem; font-weight: 600; color: #4a5061; white-space: nowrap;
+}
+.wall-mix-note {
+  margin: 0.7rem 0 0; font-size: 0.78rem; line-height: 1.4; color: #2a2f3f;
+}
+body.playing-challenge .mix-value,
+body.playing-challenge .mix-key,
+body.playing-challenge .wall-mix-note { color: var(--muted); }
+
+/* ---------- The mastered mix button ---------- */
+.btn-mix {
+  width: 100%; margin-top: 0.5rem;
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  background: var(--gold); color: #3d2805;
+  font-family: var(--display); font-weight: 600;
+}
+.btn-mix .mix-lock { width: 15px; height: 15px; flex-shrink: 0; display: none; }
+/* Locked reads as an outline with a padlock, not a dimmed gold button — the
+   reward should look like something not yet taken, not something broken. */
+.btn-mix.is-locked {
+  background: none; color: #65705f;
+  border: 2px dashed var(--accent-line);
+  font-family: inherit; font-weight: 600; font-size: 0.9rem;
+}
+.btn-mix.is-locked .mix-lock { display: block; }
+.btn-mix:disabled { cursor: not-allowed; }
+.btn-mix.is-locked:disabled { opacity: 1; }
+
 /* ---------- Quickest / slowest cards in a table ---------- */
 .wall-facts {
   display: grid;

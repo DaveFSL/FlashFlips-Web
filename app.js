@@ -131,6 +131,7 @@
     gameStart: 0,
     elapsed: 0,
     mixTables: false,
+    mixMastered: false,
     selectedTable: 2,
     menuLocked: false,
     cardStartedAt: 0,
@@ -850,6 +851,7 @@
   function applyStudentAssignment(s) {
     // Pre-select the player's last/assigned table as a convenience, but never lock it.
     game.mixTables = !!s.assignedMixMode;
+    game.mixMastered = false;
     game.selectedTable = (s.assignedTables && s.assignedTables[0]) || 2;
     game.menuLocked = false;
   }
@@ -859,6 +861,7 @@
     currentStudentId = null;
     game.menuLocked = false;
     game.mixTables = false;
+    game.mixMastered = false;
     game.selectedTable = table;
     startGame();
   }
@@ -983,6 +986,7 @@
       count.classList.add("hidden");
       key.classList.add("hidden");
       nudge.classList.add("hidden");
+      $("#btn-mix-mastered").classList.add("hidden");
       return;
     }
 
@@ -1003,13 +1007,80 @@
         : `${mastered} of ${CORE_MAX} mastered`;
     count.classList.remove("hidden");
     key.classList.remove("hidden");
+
+    // The mastered mix. A padlock and a count until six tables are gold, then
+    // a gold button that stays put even if one slips back — see mixUnlocked.
+    // Mastered challenge tables count towards the six and join the deck.
+    const mixBtn = $("#btn-mix-mastered");
+    const gold = masteredTables(student).length;
+    const unlocked = mixUnlocked(student);
+    mixBtn.classList.remove("hidden");
+    mixBtn.classList.toggle("is-locked", !unlocked);
+    // Below two tables there is nothing to mix, however it was earned.
+    mixBtn.disabled = game.menuLocked || !unlocked || gold < 2;
+    $("#mix-mastered-label").textContent = !unlocked
+      ? `Mix my mastered tables — ${gold} of ${MIX_UNLOCK} to unlock`
+      : gold < 2
+        ? "★ Mix my mastered tables — needs two gold tables"
+        : `★ Mix my ${gold} mastered tables`;
   }
 
   // --- Game ---
   const MIX_DECK_SIZE = 20;
+  // Gold tables needed before the mastered mix opens up. It is a reward for
+  // work already done, not a way into tables a child hasn't learned yet.
+  const MIX_UNLOCK = 6;
 
   function isChallengeTable(table) {
     return table > CORE_MAX;
+  }
+
+  function isMixRound() {
+    return game.mixMastered || game.mixTables;
+  }
+
+  // Core and challenge tables alike — a mastered 13× has earned its place in
+  // the pot next to a mastered 2×.
+  function masteredTables(student) {
+    if (!student) return [];
+    return range(1, CHALLENGE_MAX).filter(
+      (n) => masteryFor(student, n).state === "mastered"
+    );
+  }
+
+  /**
+   * Once earned, the mastered mix stays earned. Mastery is recalculated from
+   * raw times on every render, so a table can slip back to practising — when
+   * it does the deck simply gets smaller. Taking the reward away again would
+   * be a poor trade with a child.
+   */
+  function mixUnlocked(student) {
+    if (!student) return false;
+    if (!student.mixUnlocked && masteredTables(student).length >= MIX_UNLOCK) {
+      student.mixUnlocked = true;
+      saveStudents();
+    }
+    return !!student.mixUnlocked;
+  }
+
+  /**
+   * Deal `size` cards by taking one from each table in turn, reshuffling the
+   * order every pass. Shuffling every fact together and slicing off the top
+   * leaves whole tables out of a round — with twelve tables in the pot that
+   * is about two of them every time, and it gets worse the more tables a
+   * child masters, which is backwards. Dealing in turn never does it.
+   */
+  function dealAcrossTables(pools, size) {
+    const out = [];
+    const left = pools.map((p) => shuffle(p.slice()));
+    while (out.length < size && left.some((p) => p.length)) {
+      const order = shuffle(left.map((_, i) => i)).filter((i) => left[i].length);
+      for (const i of order) {
+        if (out.length >= size) break;
+        out.push(left[i].pop());
+      }
+    }
+    return out;
   }
 
   /**
@@ -1026,9 +1097,12 @@
   }
 
   function buildDeck() {
-    const cards = [];
     let tables;
-    if (game.mixTables) {
+    if (game.mixMastered) {
+      // Only tables currently gold. Mixing in ones they haven't learned would
+      // make this a test of what they can't do rather than a reward.
+      tables = masteredTables(currentStudent());
+    } else if (game.mixTables) {
       // Challenge mix draws only from 13–20; the standard mix stays on 1–12 so
       // a 2× never lands in the same deck as a 19×.
       tables = game.challenge
@@ -1037,8 +1111,10 @@
     } else {
       tables = [game.selectedTable];
     }
-    tables.forEach((t) => {
+
+    const pools = tables.map((t) => {
       const maxFactor = maxFactorFor(t);
+      const cards = [];
       for (let i = 1; i <= maxFactor; i++) {
         cards.push({
           id: uid(),
@@ -1049,10 +1125,13 @@
           challenge: isChallengeTable(t),
         });
       }
+      return cards;
     });
-    const shuffled = shuffle(cards);
-    // Mix mode draws from every table, so keep rounds to a manageable 20 cards.
-    return game.mixTables ? shuffled.slice(0, MIX_DECK_SIZE) : shuffled;
+
+    // A single table is the whole deck, in order-shuffled form, as it always
+    // was. A mix is dealt across its tables and capped at 20 cards.
+    if (!isMixRound()) return shuffle(pools[0] || []);
+    return dealAcrossTables(pools, MIX_DECK_SIZE);
   }
 
   function startGame() {
@@ -1078,17 +1157,21 @@
     // The whole game screen picks up challenge colours when a challenge table
     // is in play, so a teacher can see from across the room who is on 17× and
     // ask why, if they are meant to be on their 4s.
-    challengePalette = game.mixTables
-      ? game.challenge
-      : isChallengeTable(game.selectedTable);
+    challengePalette = game.mixMastered
+      ? false
+      : game.mixTables
+        ? game.challenge
+        : isChallengeTable(game.selectedTable);
     $("#challenge-chip").classList.toggle("hidden", !challengePalette);
 
     showScreen("game");
-    $("#game-table-label").textContent = game.mixTables
-      ? game.challenge
-        ? "Challenge Mix"
-        : "Mixed Tables"
-      : `${game.selectedTable}× Tables`;
+    $("#game-table-label").textContent = game.mixMastered
+      ? "My Mastered Tables"
+      : game.mixTables
+        ? game.challenge
+          ? "Challenge Mix"
+          : "Mixed Tables"
+        : `${game.selectedTable}× Tables`;
     renderGame();
   }
 
@@ -1381,7 +1464,7 @@
     const s = currentStudent();
     const wallBtn = $("#btn-summary-wall");
     wallBtn.classList.toggle("hidden", !s);
-    if (s && !game.mixTables) {
+    if (s && !isMixRound()) {
       const m = masteryFor(s, game.selectedTable);
       $("#summary-mastered").classList.toggle("hidden", m.state !== "mastered");
       if (m.state === "mastered") {
@@ -1400,16 +1483,24 @@
     if (!s) return;
     // Challenge mix is kept as its own key so it never averages in with the
     // core mix — they are different decks doing different work.
-    const tableKey = game.mixTables
-      ? game.challenge
-        ? "mix-challenge"
-        : "mix"
-      : String(game.selectedTable);
-    const tableName = game.mixTables
-      ? game.challenge
-        ? "Challenge Mix"
-        : "Mixed Tables"
-      : `${game.selectedTable}× Tables`;
+    // The mastered mix gets its own key too. It must never land under a
+    // table's own key: two or three cards are not a round, and letting them
+    // in would mean a star could be lost on three cards, or the fortnightly
+    // check marked as passed without the table ever being properly tested.
+    const tableKey = game.mixMastered
+      ? "mix-mastered"
+      : game.mixTables
+        ? game.challenge
+          ? "mix-challenge"
+          : "mix"
+        : String(game.selectedTable);
+    const tableName = game.mixMastered
+      ? "My Mastered Tables"
+      : game.mixTables
+        ? game.challenge
+          ? "Challenge Mix"
+          : "Mixed Tables"
+        : `${game.selectedTable}× Tables`;
     const firstPassMs = game.attempts
       .filter((a) => a.round === 1 && !isAbandoned(a.ms))
       .map((a) => a.ms);
@@ -1425,9 +1516,14 @@
       missedFacts: [...game.missedFacts],
       schemaVersion: SCHEMA_VERSION,
       cleanFirstPass: rounds === 1,
-      challenge: game.mixTables
-        ? game.challenge
-        : isChallengeTable(game.selectedTable),
+      // A mastered mix can hold both kinds at once, so the session-level flag
+      // is false and each card carries its own — which is what the threshold
+      // reads anyway.
+      challenge: game.mixMastered
+        ? false
+        : game.mixTables
+          ? game.challenge
+          : isChallengeTable(game.selectedTable),
       attempts: [...game.attempts],
       firstPassMedianMs: median(firstPassMs),
       dominantInput: dominantValue(game.attempts.map((a) => a.input)),
@@ -1474,6 +1570,7 @@
     }
 
     renderWallBars(student);
+    renderMixComparison(student);
 
     $("#wall-summary").textContent =
       mastered === CORE_MAX
@@ -1519,11 +1616,182 @@
     return pips;
   }
 
+  // Mixed-deck rounds needed before any of the comparison is shown, and the
+  // number of facts a table must have in BOTH settings before it can appear.
+  const MIX_STATS_AFTER = 3;
+  const MIX_PAIRED_FACTS = 3;
+
+  /**
+   * Each mastered table two ways: on its own, and inside a mixed deck.
+   *
+   * The comparison is PAIRED — only facts that turn up in both settings are
+   * used, and a table's two numbers are built from that same set of facts.
+   * A mixed deck deals a table only two or three of its twelve facts, so
+   * comparing whatever it happened to serve against the table's whole average
+   * would measure luck rather than knowledge: three easy ones would make a
+   * table look faster in a mix than on its own, which is nonsense.
+   *
+   * What the gap means: a round of one table has rhythm to lean on, and a
+   * child can count on from the last answer. In a mixed deck the same fact
+   * arrives cold. A big gap says the sequence is learned, not the facts.
+   */
+  function mixComparison(student) {
+    if (!student) return null;
+    const all = student.sessions || [];
+    const mixes = all.filter((s) => s.tableKey === "mix-mastered");
+    if (mixes.length < MIX_STATS_AFTER) return null;
+
+    const byFact = (sessions) => {
+      const m = new Map();
+      sessions.forEach((s) => {
+        if (!Array.isArray(s.attempts)) return;
+        s.attempts.forEach((a) => {
+          if (a.round !== 1 || !a.correct || isAbandoned(a.ms)) return;
+          const q = String(a.q);
+          if (!m.has(q)) m.set(q, []);
+          m.get(q).push(a.ms);
+        });
+      });
+      return m;
+    };
+
+    const inMix = byFact(mixes);
+    const rows = [];
+    let pending = 0;
+
+    masteredTables(student).forEach((t) => {
+      // Sessions under a table's own key only ever hold that table's facts,
+      // so intersecting with the mixed-deck facts pairs them up directly.
+      const solo = byFact(all.filter((s) => s.tableKey === String(t)));
+      const paired = [];
+      solo.forEach((times, q) => {
+        if (inMix.has(q)) paired.push({ solo: median(times), mix: median(inMix.get(q)) });
+      });
+      if (paired.length < MIX_PAIRED_FACTS) {
+        pending++;
+        return;
+      }
+      rows.push({
+        table: t,
+        facts: paired.length,
+        solo: median(paired.map((p) => p.solo)),
+        mix: median(paired.map((p) => p.mix)),
+        challenge: isChallengeTable(t),
+      });
+    });
+
+    if (rows.length < 2) return null;
+    rows.forEach((r) => (r.gap = r.mix - r.solo));
+    rows.sort((a, b) => a.gap - b.gap);
+    return { rows, pending, mixes: mixes.length };
+  }
+
   const BAR_H = 150;
   // How many recent rounds on a table the bar reads. Deliberately longer than
   // the mastery window of 3, so one ragged round moves the bar without
   // defining it.
   const BAR_WINDOW = 5;
+
+  // How much slower in a mixed deck before a table is worth another go on its
+  // own, and how close before it counts as known anywhere. A ratio rather than
+  // a flat number of seconds, so the 12s aren't judged by the 2s' standard.
+  const MIX_GAP_FLAG = 1.4;
+  const MIX_GAP_SOLID = 1.2;
+
+  function secs(ms) {
+    return `${(ms / 1000).toFixed(1)}s`;
+  }
+
+  function renderMixComparison(student) {
+    const group = $("#wall-mix-group");
+    const wrap = $("#wall-mix");
+    const data = mixComparison(student);
+    if (!data) {
+      group.classList.add("hidden");
+      return;
+    }
+    group.classList.remove("hidden");
+
+    const maxMs = Math.max(...data.rows.map((r) => Math.max(r.solo, r.mix)));
+    const width = (ms) => `${Math.max(5, Math.round((ms / maxMs) * 100))}%`;
+
+    wrap.innerHTML = "";
+    wrap.setAttribute("role", "img");
+    wrap.setAttribute(
+      "aria-label",
+      "Seconds per card on each mastered table, on its own and in a mixed deck: " +
+        data.rows
+          .map(
+            (r) =>
+              `${r.table} times, ${secs(r.solo)} on its own, ${secs(r.mix)} in a mixed deck`
+          )
+          .join(", ")
+    );
+
+    data.rows.forEach((r) => {
+      const row = document.createElement("div");
+      row.className = "mix-row";
+
+      const lab = document.createElement("span");
+      lab.className = "mix-label";
+      lab.textContent = `${r.table}×`;
+      if (r.challenge) lab.classList.add("is-challenge");
+
+      const bars = document.createElement("div");
+      bars.className = "mix-bars";
+      [
+        ["solo", `just ${r.table}s`, r.solo],
+        ["mixed", "in a mixed deck", r.mix],
+      ].forEach(([kind, text, ms]) => {
+        const line = document.createElement("div");
+        line.className = "mix-line";
+        // The bar lives in its own track so its percentage is of the track and
+        // not of whatever the label leaves over — otherwise the longest bar
+        // pushes its own caption off the edge.
+        const track = document.createElement("span");
+        track.className = "mix-track";
+        const bar = document.createElement("i");
+        bar.className = `mix-bar mix-bar-${kind}`;
+        bar.style.width = width(ms);
+        track.appendChild(bar);
+        const v = document.createElement("span");
+        v.className = "mix-value";
+        v.textContent = `${text} ${secs(ms)}`;
+        line.append(track, v);
+        bars.appendChild(line);
+      });
+
+      row.append(lab, bars);
+      wrap.appendChild(row);
+    });
+
+    const list = (ts) =>
+      ts.length === 1
+        ? `${ts[0]}s`
+        : `${ts.slice(0, -1).map((t) => `${t}s`).join(", ")} and ${ts[ts.length - 1]}s`;
+
+    const solid = data.rows
+      .filter((r) => r.mix / r.solo < MIX_GAP_SOLID)
+      .slice(0, 3)
+      .map((r) => r.table);
+    const wobbly = data.rows.filter((r) => r.mix / r.solo >= MIX_GAP_FLAG).slice(-1);
+
+    const lines = [];
+    if (solid.length) lines.push(`Your ${list(solid)} you know anywhere.`);
+    if (wobbly.length) {
+      lines.push(`Your ${wobbly[0].table}s are worth another go on their own.`);
+    } else if (!solid.length) {
+      lines.push("Every gold table holds up when the cards are mixed up.");
+    }
+    if (data.pending) {
+      lines.push(
+        data.pending === 1
+          ? "One more table needs a few goes in a mixed deck before it shows here."
+          : `${data.pending} more tables need a few goes in a mixed deck before they show here.`
+      );
+    }
+    $("#wall-mix-note").textContent = lines.join(" ");
+  }
 
   function renderWallBars(student) {
     const group = $("#wall-bars-group");
@@ -2124,7 +2392,16 @@
     $("#btn-wall").addEventListener("click", openMasteryWall);
     $("#btn-summary-wall").addEventListener("click", openMasteryWall);
 
+    $("#btn-mix-mastered").addEventListener("click", () => {
+      const s = currentStudent();
+      if (!s || !mixUnlocked(s) || masteredTables(s).length < 2) return;
+      game.mixMastered = true;
+      game.mixTables = false;
+      startGame();
+    });
+
     $("#btn-start").addEventListener("click", () => {
+      game.mixMastered = false;
       game.mixTables = $("#mix-tables").checked;
       if (!game.mixTables) {
         const sel = document.querySelector(".table-btn.selected");
